@@ -1,5 +1,5 @@
-import { speakerHolesGLSL } from './glsl-speaker.js?v=202610021616';
-import { partsGLSL } from './glsl-parts.js?v=202610021616';
+import { speakerHolesGLSL } from './glsl-speaker.js?v=202610021644';
+import { partsGLSL } from './glsl-parts.js?v=202610021644';
 
 /**
  * Body shaders (GLSL ES 3.00 / WebGL2).
@@ -1525,6 +1525,7 @@ uniform float uMono;      // 1 = the grey version: tone-on-tone shape with a dot
 uniform float uMonoParts; // 1 = the parts in greys too (look a); 0 = parts keep their colours (look b)
 uniform vec3  uDotCol;
 uniform float uDotStep;   // dot pitch, device px
+uniform float uDots;      // 1 = the dot pattern on the grey shape (look a only)
 
 void main() {
   // the shape: whole cells
@@ -1533,7 +1534,7 @@ void main() {
   ivec2 c = ivec2(floor(f));
   float sid = floor(texelFetch(uG, clamp(c + 1, ivec2(0), lim), 0).r * 255.0 + 0.5);
   vec4 col = sid > 0.0 ? vec4(sid > 1.5 ? uWheelCol : uSkinCol, 1.0) : vec4(0.0);
-  if (uMono > 0.5 && sid > 0.0) {
+  if (uMono > 0.5 && uDots > 0.5 && sid > 0.0) {
     // a fine, even dot pattern over the pixelated shape
     vec2 g = mod(gl_FragCoord.xy - uGridOff, uDotStep) - 0.5 * uDotStep;
     float r = max(0.7, uDotStep * 0.17);

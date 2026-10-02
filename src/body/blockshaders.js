@@ -1,5 +1,5 @@
-import { speakerHolesGLSL } from './glsl-speaker.js?v=202610021616';
-import { partsGLSL } from './glsl-parts.js?v=202610021616';
+import { speakerHolesGLSL } from './glsl-speaker.js?v=202610021644';
+import { partsGLSL } from './glsl-parts.js?v=202610021644';
 
 /**
  * Block-view shaders: the object as the hard primitives it is built from.
