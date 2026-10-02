@@ -447,6 +447,9 @@ export function createNodes({ body }) {
       const [px, py] = t ? view.project(t[0], t[1], t[2]) : [cx, (y0 + y1) / 2];
       return { k, py, side: Math.abs(px - cx) < 24 ? prefer[k] : px < cx ? 'left' : 'right', w: TOOLS[k].offsetWidth, h: TOOLS[k].offsetHeight };
     }).sort((p, q) => p.py - q.py);
+    // the prompt line at the top is off limits too (a band across the middle of the screen)
+    const pr = document.getElementById('prompt')?.getBoundingClientRect();
+    if (pr) taken.push({ x: vw * 0.22, y: pr.top - 4, w: vw * 0.56, h: pr.height + 8 });
     const hits = (x, y, w, h) => taken.find((r) => x < r.x + r.w + 12 && x + w + 12 > r.x && y < r.y + r.h + 14 && y + h + 14 > r.y);
     const offList = (x, y, w, h) => !(list && x < list.right + 12 && y + h > list.top - 12 && y < list.bottom + 12);
     for (const it of items) {

@@ -90,15 +90,6 @@ const SPEAKER_BOX = [
     ],
   },
   {
-    id: 'radio',
-    prompt: 'i want it to look like an old radio',
-    // a box with a thin wall
-    steps: [
-      { at: 0, dur: 700, shape: { padding: 4, blend: 6 } },
-      { at: 300, form: 'box' },
-    ],
-  },
-  {
     id: 'two',
     prompt: 'i want to control bass and volume',
     steps: [

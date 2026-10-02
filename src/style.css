@@ -621,7 +621,7 @@ body.is-dragging-ref, body.is-dragging-ref * { cursor: grabbing !important; }
 }
 
 /* components list (left side) */
-.node.bom { left: 20px; top: 320px; }
+.node.bom { left: 20px; top: clamp(140px, calc(100vh - 350px), 320px); }   /* moves up on short windows, clear of the log */
 /* text only: no box, no scroll */
 .bom .rows { width: 220px; line-height: 1.55; color: var(--ink); }
 .bom .sec { color: var(--ink-soft); margin-top: 10px; }
@@ -720,7 +720,7 @@ body.look-1 .node.tool .tab::after, body.look-1 .node.ref .tab::after {
   top: 0;
   bottom: 0;
   right: -12px;
-  width: 22px;
+  width: 44px;            /* reaches well back under the tab, so no sliver of frame shows at the base */
   background: var(--nd-body);
   border-top-right-radius: 5px;
   transform: skewX(22deg);
