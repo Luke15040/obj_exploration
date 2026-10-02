@@ -533,6 +533,13 @@ body.is-dragging-ref, body.is-dragging-ref * { cursor: grabbing !important; }
 .scr .px.on { fill: #ff5ab4; }
 .scr .px.mono { fill: #f4f4f4; }
 .scr .smile { fill: none; stroke: #f4f4f4; stroke-width: 1.2; stroke-linecap: round; }
+/* pixel 3d: colour / grey shape switch, bottom right */
+#p3d-grey {
+  position: fixed; right: 20px; bottom: 22px; z-index: 3; display: none;
+  font: inherit; font-size: 11px; color: var(--ink); text-transform: lowercase;
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+body.mode-pixel3d #p3d-grey { display: block; }
 /* show / hide the tools (pill next to the case switch) */
 #tools-toggle {
   position: fixed; top: 20px; left: 240px; z-index: 3;

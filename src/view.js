@@ -31,6 +31,14 @@ export const view = {
     fwd: [0, 0, -1],
   },
 
+  zoom: 1, // mouse-wheel zoom on top of the fit scale
+
+  /** Change the zoom (orbit.js eases it). */
+  setZoom(z) {
+    this.zoom = z;
+    this.update();
+  },
+
   update() {
     this.vw = window.innerWidth;
     this.vh = window.innerHeight;
@@ -47,7 +55,7 @@ export const view = {
       (availH * 0.9) / (heightMm * CONFIG.pxPerMm),
     );
     const [lo, hi] = CONFIG.fitRange;
-    this.scale = CONFIG.pxPerMm * Math.min(hi, Math.max(lo, fit));
+    this.scale = CONFIG.pxPerMm * Math.min(hi, Math.max(lo, fit)) * this.zoom;
 
     this.cx = this.vw / 2;
     this.cy = top + availH / 2;

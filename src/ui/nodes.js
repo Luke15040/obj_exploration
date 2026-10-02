@@ -266,6 +266,7 @@ export function createNodes({ body }) {
     </div>`;
   document.body.appendChild(eng);
   const engLink = makeLink('ink');
+  const shpLink = makeLink('ink');
   const drawEnergy = () => {
     eng.querySelector('svg').innerHTML = ENERGY[state.power].svg;
     eng.querySelector('.pick-name').textContent = ENERGY[state.power].label;
@@ -521,6 +522,13 @@ export function createNodes({ body }) {
     linkTo(spk, spkLink, !spk.classList.contains('hidden') && !!e, e ? e.p : [0, 0, 0]);
     const pw = body.layout()?.parts.find((q) => q.key === 'battery');
     linkTo(eng, engLink, !eng.classList.contains('hidden') && !!pw, pw ? pw.c : [0, 0, 0]);
+    // shape → the front of the object, at its middle height
+    const Lp = body.layout();
+    if (Lp && Lp.parts.length) {
+      const lo = [0, 1, 2].map((k) => Math.min(...Lp.parts.map((q) => q.c[k] - q.h[k])));
+      const hi = [0, 1, 2].map((k) => Math.max(...Lp.parts.map((q) => q.c[k] + q.h[k])));
+      linkTo(shp, shpLink, !shp.classList.contains('hidden'), [lo[0], (lo[1] + hi[1]) / 2, hi[2] * 0.5]);
+    } else linkTo(shp, shpLink, false, [0, 0, 0]);
   }
 
   return {

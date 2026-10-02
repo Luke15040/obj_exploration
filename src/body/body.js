@@ -889,8 +889,8 @@ export function createBody(canvas) {
     gl.uniform1f(u.uCellPx, cell);
     gl.uniform2f(u.uGridOff, off[0], off[1]);
     const C3 = pixel3dPalette();
-    gl.uniform3fv(u.uSkinCol, hexToRgb(state.kind === 'speaker' ? C3.skinSpeaker : C3.skin));
-    gl.uniform3fv(u.uWheelCol, hexToRgb(C3.wheel));
+    gl.uniform3fv(u.uSkinCol, hexToRgb(params.pixel3dGrey ? '#b4b4b8' : state.kind === 'speaker' ? C3.skinSpeaker : C3.skin));
+    gl.uniform3fv(u.uWheelCol, hexToRgb(params.pixel3dGrey ? '#8c8c91' : C3.wheel));
     if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], pixel3dColors);
     gl.bindVertexArray(pixel3d.quad);
     gl.drawArrays(gl.TRIANGLES, 0, 6);

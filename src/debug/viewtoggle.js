@@ -21,6 +21,7 @@ export function createViewToggle({ orbit } = {}) {
     document.body.classList.toggle('mode-flat', mode === 'flat' || mode === 'flat2');
     document.body.classList.toggle('mode-pixel', mode === 'pixel' || mode === 'pixel2');
     document.body.classList.toggle('mode-empty', mode === 'empty');
+    document.body.classList.toggle('mode-pixel3d', mode === 'pixel3d');
     document.body.classList.toggle('mode-orbital', mode === 'orbital');
     root.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.view === mode));
   }
@@ -35,6 +36,14 @@ export function createViewToggle({ orbit } = {}) {
       set(MODES[(MODES.indexOf(params.view) + 1) % MODES.length]);
     }
   });
+
+  // pixel 3d: colour or grey for the pixelated shape (bottom right, only in that view)
+  const grey = document.createElement('button');
+  grey.id = 'p3d-grey';
+  const markGrey = () => { grey.textContent = params.pixel3dGrey ? 'shape: grey' : 'shape: colour'; };
+  markGrey();
+  grey.addEventListener('click', () => { params.pixel3dGrey = !params.pixel3dGrey; markGrey(); });
+  document.body.appendChild(grey);
 
   set(params.view);
   return { set };

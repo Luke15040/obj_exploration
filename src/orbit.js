@@ -20,6 +20,9 @@ export function createOrbit(svg) {
   const pitch = new Spring(base.pitch * DEG, 3.2, 0.85);
   const pointer = { nx: 0, ny: 0 }; // -1..1 from the viewport centre
   let drag = null;
+  // mouse-wheel zoom, eased
+  const zoom = new Spring(1, 3.5, 1);
+  let zoomTarget = 1;
 
   const isBackground = (e) => !e.target.closest('[data-part]');
 
@@ -48,8 +51,15 @@ export function createOrbit(svg) {
   svg.addEventListener('pointerup', end);
   svg.addEventListener('pointercancel', end);
 
+  svg.addEventListener('wheel', (e) => {
+    if (e.defaultPrevented || e.target.closest('[data-part^="extra"]')) return;   // over a knob the wheel turns it
+    e.preventDefault();
+    zoomTarget = clamp(zoomTarget * Math.exp(-e.deltaY * 0.0015), 0.5, 3.5);
+  }, { passive: false });
+
   svg.addEventListener('dblclick', (e) => {
     if (!isBackground(e)) return;
+    zoomTarget = 1;
     const wrapped = ((base.yaw % 360) + 540) % 360 - 180;   // -180..180
     const front = Math.abs(wrapped) < 1 && Math.abs(base.pitch) < 1;
     setView(front ? '3/4' : 'front');
@@ -69,6 +79,9 @@ export function createOrbit(svg) {
     pitch.target = (base.pitch + pointer.ny * C.parallax[1] * k) * DEG;
     yaw.step(dt);
     pitch.step(dt);
+    zoom.target = zoomTarget;
+    zoom.step(dt);
+    if (Math.abs(zoom.value - view.zoom) > 1e-4) view.setZoom(zoom.value);
     view.setCamera(yaw.value, pitch.value);
   }
 
