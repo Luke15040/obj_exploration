@@ -21,3 +21,8 @@ python serve.py
 ```
 
 then open http://127.0.0.1:5179/ (any static server works).
+
+## Publishing
+
+Run `python bump.py` before each push: it stamps `?v=<version>` on every import so
+browsers fetch the new files instead of their cached copies.

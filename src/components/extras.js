@@ -1,11 +1,11 @@
-import { CONFIG } from '../config.js';
-import { state, onChange, addExtra, updateExtra, removeExtra, mountNormal } from '../state.js';
-import { view } from '../view.js';
-import { Spring } from '../body/springs.js';
-import { snapRay, resnap, frontPoint, shapeSpots } from '../body/sdf.js';
-import { FREE_SLOTS, freeKnobSpots } from '../parts.js';
-import { holePattern } from '../speaker-patterns.js';
-import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js';
+import { CONFIG } from '../config.js?v=202610021545';
+import { state, onChange, addExtra, updateExtra, removeExtra, mountNormal } from '../state.js?v=202610021545';
+import { view } from '../view.js?v=202610021545';
+import { Spring } from '../body/springs.js?v=202610021545';
+import { snapRay, resnap, frontPoint, shapeSpots } from '../body/sdf.js?v=202610021545';
+import { FREE_SLOTS, freeKnobSpots } from '../parts.js?v=202610021545';
+import { holePattern } from '../speaker-patterns.js?v=202610021545';
+import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js?v=202610021545';
 
 const NS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs = {}, parent) => {

@@ -1,7 +1,7 @@
-import { CONFIG } from '../config.js';
-import { state } from '../state.js';
-import { view } from '../view.js';
-import { pathOf, segsOf, hull, cylinderLines, circle3, boxLines } from './wire.js';
+import { CONFIG } from '../config.js?v=202610021545';
+import { state } from '../state.js?v=202610021545';
+import { view } from '../view.js?v=202610021545';
+import { pathOf, segsOf, hull, cylinderLines, circle3, boxLines } from './wire.js?v=202610021545';
 
 const NS = 'http://www.w3.org/2000/svg';
 

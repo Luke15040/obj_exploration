@@ -1,13 +1,13 @@
-import { CONFIG } from '../config.js';
-import { state, params } from '../state.js';
-import { view } from '../view.js';
-import { Spring } from './springs.js';
-import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader } from './shaders.js';
-import { gbufferShader, edgeShader } from './blockshaders.js';
-import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js';
-import { generateBlueNoise } from './bluenoise.js';
-import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js';
-import { holePattern } from '../speaker-patterns.js';
+import { CONFIG } from '../config.js?v=202610021545';
+import { state, params } from '../state.js?v=202610021545';
+import { view } from '../view.js?v=202610021545';
+import { Spring } from './springs.js?v=202610021545';
+import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader } from './shaders.js?v=202610021545';
+import { gbufferShader, edgeShader } from './blockshaders.js?v=202610021545';
+import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610021545';
+import { generateBlueNoise } from './bluenoise.js?v=202610021545';
+import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610021545';
+import { holePattern } from '../speaker-patterns.js?v=202610021545';
 
 const METHODS = { bayer: 0, blue: 1, split: 2 };
 

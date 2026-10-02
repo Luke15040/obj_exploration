@@ -1,16 +1,16 @@
-import { view } from './view.js';
-import { createOrbit } from './orbit.js';
-import { createBody } from './body/body.js';
-import { createComponents } from './components/components.js';
-import { attachDrag } from './components/drag.js';
-import { createExtras } from './components/extras.js';
-import { createDebugPanel } from './debug/panel.js';
-import { createPrompts } from './prompts.js';
-import { createNodes } from './ui/nodes.js';
-import { createBom } from './ui/bom.js';
-import { createPartLabels } from './ui/labels.js';
-import { createDiagram } from './ui/diagram.js';
-import { createViewToggle } from './debug/viewtoggle.js';
+import { view } from './view.js?v=202610021545';
+import { createOrbit } from './orbit.js?v=202610021545';
+import { createBody } from './body/body.js?v=202610021545';
+import { createComponents } from './components/components.js?v=202610021545';
+import { attachDrag } from './components/drag.js?v=202610021545';
+import { createExtras } from './components/extras.js?v=202610021545';
+import { createDebugPanel } from './debug/panel.js?v=202610021545';
+import { createPrompts } from './prompts.js?v=202610021545';
+import { createNodes } from './ui/nodes.js?v=202610021545';
+import { createBom } from './ui/bom.js?v=202610021545';
+import { createPartLabels } from './ui/labels.js?v=202610021545';
+import { createDiagram } from './ui/diagram.js?v=202610021545';
+import { createViewToggle } from './debug/viewtoggle.js?v=202610021545';
 
 const canvas = document.getElementById('body-layer');
 // if the GPU resets (driver timeout), come back with a fresh page once it is available again
