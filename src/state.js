@@ -43,7 +43,7 @@ export const params = {
   highlight: null,  // key of the part hovered in the components list
   palette3d: 0,     // pixel 3d: which palette (changes at every "start over")
   pixel3dGrey: false, // pixel 3d: the pixelated shape in greys instead of colour
-  view: 'dots',     // 'dots' | 'blocks' (visible outlines) | 'flat' / 'flat2' (coloured shapes, sketchy / clean) | 'pixel' (halftone mosaic)
+  view: 'pixel3d', // first view on opening;     // 'dots' | 'blocks' (visible outlines) | 'flat' / 'flat2' (coloured shapes, sketchy / clean) | 'pixel' (halftone mosaic)
   dotStyle: 'cloud', // 'cloud' (points on the surface, solid parts) | 'grid' (screen-space dithering)
   pitch: 2.4,       // dot spacing in mm, so it scales with the object
   dotSize: 0.72,    // max dot diameter as a fraction of the cell

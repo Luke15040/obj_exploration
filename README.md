@@ -10,7 +10,7 @@ wheels, knob caps) is provisional and drawn as the "body".
 - **case 2 · speaker** — a speaker box; free skin or primitive shapes (box, cylinder,
   prism, hexagon, pentagon, octagon, dome) or a random **totem**, with the speaker
   and knobs placing themselves on the faces
-- **views** — dots, flat 1, flat 2, dither 1, dither 2, pixel 3d, glass, empty
+- **views** — pixel 3d (opens first, front view), dots, flat 1, flat 2, dither 1, dither 2, glass, empty
 
 Vanilla JS + WebGL2 (raymarched SDFs), no build step.
 
