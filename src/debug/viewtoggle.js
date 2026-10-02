@@ -1,4 +1,4 @@
-import { params } from '../state.js?v=202610021545';
+import { params } from '../state.js?v=202610021616';
 
 const MODES = ['pixel3d', 'dots', 'flat2', 'flat', 'pixel', 'pixel2', 'glass', 'empty'];
 const LABELS = { dots: 'dots', blocks: 'lines', flat: 'flat 2', flat2: 'flat 1', pixel: 'dither 1', pixel2: 'dither 2', pixel3d: 'pixel 3d', glass: 'glass', empty: 'empty', orbital: 'orbital', blob: 'blob' };
@@ -42,12 +42,12 @@ export function createViewToggle({ orbit } = {}) {
   });
 
   // the look (bottom right): look a = prototype (reference cards, warm, grey pixel 3d) ·
-  // look b = experiment (plain nodes, cool greys, colour pixel 3d)
+  // look b = experiment (plain nodes, cool greys, grey pixel shape with colour parts)
   const looks = document.createElement('div');
   looks.id = 'looks';
   looks.innerHTML = '<button data-look="1" title="prototype look">look a</button><button data-look="2" title="experiment look">look b</button>';
   const markLook = () => {
-    params.pixel3dGrey = params.look === 1;
+    params.pixel3dGrey = true;   // the pixel shape is grey in both looks; look b keeps the parts in colour
     document.body.classList.toggle('look-1', params.look === 1);
     document.body.classList.toggle('look-2', params.look === 2);
     looks.querySelectorAll('button').forEach((b) => b.classList.toggle('on', Number(b.dataset.look) === params.look));

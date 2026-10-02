@@ -1,13 +1,13 @@
-import { CONFIG } from '../config.js?v=202610021545';
-import { state, params } from '../state.js?v=202610021545';
-import { view } from '../view.js?v=202610021545';
-import { Spring } from './springs.js?v=202610021545';
-import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader } from './shaders.js?v=202610021545';
-import { gbufferShader, edgeShader } from './blockshaders.js?v=202610021545';
-import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610021545';
-import { generateBlueNoise } from './bluenoise.js?v=202610021545';
-import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610021545';
-import { holePattern } from '../speaker-patterns.js?v=202610021545';
+import { CONFIG } from '../config.js?v=202610021616';
+import { state, params } from '../state.js?v=202610021616';
+import { view } from '../view.js?v=202610021616';
+import { Spring } from './springs.js?v=202610021616';
+import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader } from './shaders.js?v=202610021616';
+import { gbufferShader, edgeShader } from './blockshaders.js?v=202610021616';
+import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610021616';
+import { generateBlueNoise } from './bluenoise.js?v=202610021616';
+import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610021616';
+import { holePattern } from '../speaker-patterns.js?v=202610021616';
 
 const METHODS = { bayer: 0, blue: 1, split: 2 };
 
@@ -913,10 +913,13 @@ export function createBody(canvas) {
     gl.uniform2f(u.uGridOff, off[0], off[1]);
     const C3 = pixel3dPalette();
     // grey version: the shape just a touch darker than the page, with a dot pattern
-    gl.uniform3fv(u.uSkinCol, hexToRgb(params.pixel3dGrey ? '#e3e2df' : state.kind === 'speaker' ? C3.skinSpeaker : C3.skin));
-    gl.uniform3fv(u.uWheelCol, hexToRgb(params.pixel3dGrey ? '#d8d6d2' : C3.wheel));
+    // look a warm greys, look b cool greys (look b keeps the parts in colour)
+    const G = params.look === 1 ? ['#e3e2df', '#d8d6d2', '#c9c7c2'] : ['#e1e1e3', '#d5d5d8', '#c4c4c9'];
+    gl.uniform3fv(u.uSkinCol, hexToRgb(params.pixel3dGrey ? G[0] : state.kind === 'speaker' ? C3.skinSpeaker : C3.skin));
+    gl.uniform3fv(u.uWheelCol, hexToRgb(params.pixel3dGrey ? G[1] : C3.wheel));
     gl.uniform1f(u.uMono, params.pixel3dGrey ? 1 : 0);
-    gl.uniform3fv(u.uDotCol, hexToRgb('#c9c7c2'));
+    gl.uniform1f(u.uMonoParts, params.pixel3dGrey && params.look === 1 ? 1 : 0);
+    gl.uniform3fv(u.uDotCol, hexToRgb(G[2]));
     gl.uniform1f(u.uDotStep, Math.max(3, cell / 2));
     if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], pixel3dColors);
     gl.bindVertexArray(pixel3d.quad);

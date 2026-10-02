@@ -1,5 +1,5 @@
-import { speakerHolesGLSL } from './glsl-speaker.js?v=202610021545';
-import { partsGLSL } from './glsl-parts.js?v=202610021545';
+import { speakerHolesGLSL } from './glsl-speaker.js?v=202610021616';
+import { partsGLSL } from './glsl-parts.js?v=202610021616';
 
 /**
  * Body shaders (GLSL ES 3.00 / WebGL2).
@@ -1521,7 +1521,8 @@ uniform vec2  uGridOff;
 uniform vec3  uSkinCol;
 uniform vec3  uWheelCol;
 uniform vec3  uTypeColor[12];
-uniform float uMono;      // 1 = the grey version: tone-on-tone shape with a dot pattern, parts in greys
+uniform float uMono;      // 1 = the grey version: tone-on-tone shape with a dot pattern
+uniform float uMonoParts; // 1 = the parts in greys too (look a); 0 = parts keep their colours (look b)
 uniform vec3  uDotCol;
 uniform float uDotStep;   // dot pitch, device px
 
@@ -1576,7 +1577,7 @@ void main() {
         float spec = pow(max(dot(reflect(-L, n), -rd), 0.0), mat == M_METAL || mat == M_RIM || mat == M_GOLD ? 24.0 : 10.0);
         shaded += vec3(spec * (mat == M_METAL || mat == M_RIM || mat == M_GOLD ? 0.6 : 0.22));
         if (mat == M_LED_LIT) shaded = matColor(mat) * 1.2;
-        if (uMono > 0.5) {
+        if (uMonoParts > 0.5) {
           // warm mauve greys (like the reference), softer contrast; lit LEDs turn white
           float l = dot(shaded, vec3(0.299, 0.587, 0.114));
           shaded = vec3(0.32 + 0.52 * l) * vec3(1.0, 0.965, 0.98);
