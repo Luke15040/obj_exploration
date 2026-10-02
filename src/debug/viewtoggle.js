@@ -1,7 +1,7 @@
 import { params } from '../state.js';
 
-const MODES = ['dots', 'flat', 'flat2', 'pixel', 'pixel2', 'pixel3d', 'glass', 'empty'];
-const LABELS = { dots: 'dots', blocks: 'lines', flat: 'flat', flat2: 'flat 2', pixel: 'pixel 1', pixel2: 'pixel 2', pixel3d: 'pixel 3d', glass: 'glass', empty: 'empty', orbital: 'orbital', blob: 'blob' };
+const MODES = ['dots', 'flat2', 'flat', 'pixel', 'pixel2', 'pixel3d', 'glass', 'empty'];
+const LABELS = { dots: 'dots', blocks: 'lines', flat: 'flat 2', flat2: 'flat 1', pixel: 'pixel 1', pixel2: 'pixel 2', pixel3d: 'pixel 3d', glass: 'glass', empty: 'empty', orbital: 'orbital', blob: 'blob' };
 
 /**
  * "dots | lines | solid" switch (the `b` key cycles). The body layer

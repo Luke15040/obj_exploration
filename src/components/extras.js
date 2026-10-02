@@ -60,7 +60,7 @@ export function createExtras(svg, { onPulse, offsets = () => [] } = {}) {
     <button data-add="speaker">+ speaker</button>
     <button data-add="knob">+ knob</button>
     <span class="hint">drag to move · scroll turns knob · del removes</span>`;
-  document.body.appendChild(bar);
+  // the toolbar is not shown any more (add-ons come from the prompts and the shapes); keys s / k still work
   bar.addEventListener('click', (e) => {
     const type = e.target.closest('[data-add]')?.dataset.add;
     if (type) spawn(type);

@@ -2,15 +2,15 @@ import { LIBRARY, CABLES } from '../parts.js';
 import { params, state } from '../state.js';
 
 /**
- * Components list at the side, in the terminal style of the other nodes:
- * the real parts in use (from the library, plus the few added ones), the
- * cables between them, and what is still provisional (drawn as points).
+ * Components list at the side, text only: the real parts in use (from the
+ * library, plus the few added ones, marked +), the cables between them, and
+ * what is still provisional. Full names and sizes in the tooltip.
  * Hovering a part highlights it in the 3D view.
  */
 export function createBom({ body }) {
   const root = document.createElement('div');
   root.className = 'node bom';
-  root.innerHTML = '<div class="tab">components</div><div class="card"><div class="rows"></div></div>';
+  root.innerHTML = '<div class="rows"></div>';
   document.body.appendChild(root);
   const rows = root.querySelector('.rows');
 
@@ -34,22 +34,20 @@ export function createBom({ body }) {
     const part = (g) => {
       const L = LIBRARY[g.lib];
       const added = L.inLibrary === false;
-      return `<div class="row part${added ? ' added' : ''}" data-key="${g.keys[0]}" title="${added ? 'added — ' + L.why : 'from the library'}">
-        <span class="n">${g.n}×</span><span class="name">${L.name}<span class="num">#${g.nums.join(' #')}</span></span><span class="dim">${size(g.lib)}</span>${added ? '<span class="flag">+</span>' : ''}</div>`;
+      const tip = `${L.name} · ${size(g.lib)} mm${added ? ' · added: ' + L.why : ''}`;
+      return `<div class="row part" data-key="${g.keys[0]}" title="${tip}"><span class="num">${g.nums.join(' ')}</span>${L.short ?? L.name}${g.n > 1 ? ` <span class="soft">×${g.n}</span>` : ''}${added ? ' <span class="soft">+</span>' : ''}</div>`;
     };
     const cable = ([kind, n]) => {
       const C = CABLES[kind];
-      const added = C.inLibrary === false;
-      return `<div class="row cable${added ? ' added' : ''}" title="${added ? 'added — ' + C.why : ''}">
-        <span class="n">${n}×</span><span class="name">${C.name}</span>${added ? '<span class="flag">+</span>' : ''}</div>`;
+      return `<span title="${C.name}">${C.short ?? C.name}${n > 1 ? ` ×${n}` : ''}${C.inLibrary === false ? ' +' : ''}</span>`;
     };
-    const provisional = ['skin / enclosure', ...(state.kind === 'speaker' ? (state.shape === 'free' ? ['front baffle'] : state.shape === 'totem' ? [`totem: ${state.totem.slice(0, 2 + state.extras.filter((e) => e.type === 'knob').length).join(' · ')}`] : [`shape: ${state.shape}`]) : ['wheels Ø90×30', 'frame bar']), ...(state.extras.some((e) => e.type === 'knob') ? ['knob caps'] : [])];
+    const provisional = ['skin', ...(state.kind === 'speaker' ? (state.shape === 'free' ? ['front baffle'] : state.shape === 'totem' ? [`totem: ${state.totem.slice(0, 2 + state.extras.filter((e) => e.type === 'knob').length).join(' · ')}`] : [state.shape]) : ['wheels', 'frame bar']), ...(state.extras.some((e) => e.type === 'knob') ? ['knob caps'] : [])];
 
     rows.innerHTML = `
-      <div class="sec">parts</div>${[...counts.values()].map(part).join('')}
-      <div class="sec">cables</div>${[...cableCounts.entries()].map(cable).join('')}
-      <div class="sec">provisional · points</div><div class="row prov">${provisional.join(' · ')}</div>
-      <div class="legend"><span class="flag">+</span> not in the library, added so it can work</div>`;
+      <div class="sec">components</div>${[...counts.values()].map(part).join('')}
+      <div class="sec">cables</div><div class="line">${[...cableCounts.entries()].map(cable).join(' · ')}</div>
+      <div class="sec">provisional</div><div class="line">${provisional.join(' · ')}</div>
+      <div class="legend">+ added so it can work</div>`;
 
     rows.querySelectorAll('.row.part').forEach((r) => {
       r.addEventListener('pointerenter', () => (params.highlight = r.dataset.key));

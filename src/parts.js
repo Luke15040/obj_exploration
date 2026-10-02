@@ -13,7 +13,7 @@
 
 export const LIBRARY = {
   servo: {
-    name: 'FEETECH STS3215 servo',
+    name: 'FEETECH STS3215 servo', short: 'servo sts3215',
     type: 0,
     // Feetech drawing: 45.23 × 24.73; 36.5 along the shaft axis (spline + rear hub included).
     // Local x = output shaft (toward the wheel), y = width, z = length
@@ -22,7 +22,7 @@ export const LIBRARY = {
     connectors: { bus: { p: [-18.2, 4.6, -0.5], d: [-1, 0, 0] } }, // 5264 3-pin, underside
   },
   feather: {
-    name: 'Adafruit ESP32-S3 Feather (4MB flash / 2MB PSRAM)',
+    name: 'Adafruit ESP32-S3 Feather (4MB flash / 2MB PSRAM)', short: 'esp32-s3 feather',
     url: 'https://www.adafruit.com/product/5477',
     type: 1,
     size: [52.3, 7.2, 22.7], // lying flat: length, height, width
@@ -34,7 +34,7 @@ export const LIBRARY = {
     },
   },
   piZero: {
-    name: 'Raspberry Pi Zero 2 W (pre-soldered headers)',
+    name: 'Raspberry Pi Zero 2 W (pre-soldered headers)', short: 'pi zero 2 w',
     url: 'https://www.adafruit.com/product/6008',
     type: 2,
     size: [65, 10, 30], // 65 × 30 board; height includes the header pins
@@ -44,7 +44,7 @@ export const LIBRARY = {
     },
   },
   respeaker: {
-    name: 'ReSpeaker 2-Mics Pi HAT',
+    name: 'ReSpeaker 2-Mics Pi HAT', short: 'respeaker hat',
     url: 'https://www.seeedstudio.com/ReSpeaker-2-Mics-Pi-HAT.html',
     type: 3,
     size: [65, 15, 30], // 65 × 30 × 15, including the female header it sits on
@@ -54,14 +54,14 @@ export const LIBRARY = {
     },
   },
   speaker: {
-    name: 'Seeed mono enclosed speaker 4Ω 5W',
+    name: 'Seeed mono enclosed speaker 4Ω 5W', short: 'speaker 4Ω 5w',
     url: 'https://www.seeedstudio.com/Mono-Enclosed-Speaker-4R-5W-p-5931.html',
     type: 4,
     size: [50, 45, 22], // local z = facing out through the hole pattern
     connectors: { lead: { p: [0, -16, -12.6], d: [0, 0, -1] } },
   },
   encoder: {
-    name: 'Adafruit I2C STEMMA QT rotary encoder with NeoPixel',
+    name: 'Adafruit I2C STEMMA QT rotary encoder with NeoPixel', short: 'rotary encoder',
     url: 'https://www.adafruit.com/product/5880',
     type: 5,
     size: [25.4, 25.4, 15.1], // board 1.6 + PEC11R body 6.5 + M7 bushing 7; the Ø6 shaft runs 13 more to the knob
@@ -69,7 +69,7 @@ export const LIBRARY = {
     connectors: { qtIn: { p: [-12.9, 0, -4.45], d: [-1, 0, 0] }, qtOut: { p: [12.9, 0, -4.45], d: [1, 0, 0] } },
   },
   matrix: {
-    name: 'Adafruit IS31FL3741 13×9 RGB LED matrix (STEMMA QT)',
+    name: 'Adafruit IS31FL3741 13×9 RGB LED matrix (STEMMA QT)', short: 'led matrix 13×9',
     url: 'https://www.adafruit.com/product/5201',
     type: 6,
     size: [51.3, 39.0, 4.6], // local z = LEDs facing out
@@ -79,7 +79,7 @@ export const LIBRARY = {
     },
   },
   servoAdapter: {
-    name: 'Waveshare Bus Servo Adapter (A)',
+    name: 'Waveshare Bus Servo Adapter (A)', short: 'servo bus adapter',
     url: 'https://www.waveshare.com/bus-servo-adapter-a.htm',
     type: 7,
     size: [42, 12, 33], // 42 × 33 board; ≈ 12 tall with the DC jack
@@ -92,14 +92,14 @@ export const LIBRARY = {
     },
   },
   pdTrigger: {
-    name: 'USB-C PD trigger module (5/9/12/15/20 V DIP switch)',
+    name: 'USB-C PD trigger module (5/9/12/15/20 V DIP switch)', short: 'usb-c pd trigger',
     url: 'https://www.amazon.com/dp/B0FNVBNNP1',
     type: 8,
     size: [28, 4.5, 11], // not used while a battery powers the object
     connectors: {},
   },
   battery: {
-    name: 'Tattu 850 mAh 3S 11.1 V LiPo (XT30)',
+    name: 'Tattu 850 mAh 3S 11.1 V LiPo (XT30)', short: 'lipo 3s 850 mah',
     url: 'https://genstattu.com/tattu-850mah-11-1v-75c-3s1p-lipo-battery-pack-with-xt30-plug.html',
     type: 9,
     inLibrary: false,
@@ -111,7 +111,7 @@ export const LIBRARY = {
     },
   },
   buck: {
-    name: 'Pololu 5 V 3.2 A step-down regulator D36V28F5',
+    name: 'Pololu 5 V 3.2 A step-down regulator D36V28F5', short: '5 v regulator',
     url: 'https://www.pololu.com/product/3782',
     type: 10,
     inLibrary: false,
@@ -126,16 +126,16 @@ export const LIBRARY = {
 
 /** Cables the parts need. */
 export const CABLES = {
-  servoBus: { code: 0, name: 'servo bus cable, 5264 3-pin (comes with the servo)', r: 1.1, albedo: 0.22 },
-  qt: { code: 1, name: 'STEMMA QT cable, JST SH 4-pin', r: 1.0, albedo: 0.55 },
-  power: { code: 2, name: '3S power leads, AWG16 (XT30)', r: 1.3, albedo: 0.3 },
-  power5: { code: 3, name: '5 V leads', r: 0.9, albedo: 0.3 },
-  uart: { code: 4, name: 'UART jumper wires', r: 0.8, albedo: 0.45 },
-  usb: { code: 5, name: 'USB-C ↔ micro USB cable', r: 1.6, albedo: 0.25 },
-  speaker: { code: 6, name: 'speaker lead, JST PH 2.0', r: 0.9, albedo: 0.25 },
+  servoBus: { code: 0, name: 'servo bus cable, 5264 3-pin (comes with the servo)', short: 'servo bus', r: 1.1, albedo: 0.22 },
+  qt: { code: 1, name: 'STEMMA QT cable, JST SH 4-pin', short: 'stemma qt', r: 1.0, albedo: 0.55 },
+  power: { code: 2, name: '3S power leads, AWG16 (XT30)', short: '3s power', r: 1.3, albedo: 0.3 },
+  power5: { code: 3, name: '5 V leads', short: '5 v leads', r: 0.9, albedo: 0.3 },
+  uart: { code: 4, name: 'UART jumper wires', short: 'uart', r: 0.8, albedo: 0.45 },
+  usb: { code: 5, name: 'USB-C ↔ micro USB cable', short: 'usb', r: 1.6, albedo: 0.25 },
+  speaker: { code: 6, name: 'speaker lead, JST PH 2.0', short: 'speaker lead', r: 0.9, albedo: 0.25 },
   groveQt: {
     code: 7,
-    name: 'Grove → STEMMA QT cable (Adafruit 4528)',
+    name: 'Grove → STEMMA QT cable (Adafruit 4528)', short: 'grove → qt',
     url: 'https://www.adafruit.com/product/4528',
     inLibrary: false,
     why: 'the ReSpeaker HAT covers the Pi header, so the matrix plugs into its Grove I2C port',

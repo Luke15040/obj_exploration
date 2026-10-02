@@ -542,32 +542,16 @@ body.is-dragging-ref, body.is-dragging-ref * { cursor: grabbing !important; }
 
 /* components list (left side) */
 .node.bom { left: 20px; top: 320px; }
-.bom .card {
-  width: 300px;
-  max-height: calc(100vh - 420px);
-  overflow-y: auto;
-  padding: 12px 10px 8px;
-}
-.bom .sec { color: var(--ink-soft); margin: 6px 0 3px; }
+/* text only: no box, no scroll */
+.bom .rows { width: 220px; line-height: 1.55; color: var(--ink); }
+.bom .sec { color: var(--ink-soft); margin-top: 10px; }
 .bom .sec:first-child { margin-top: 0; }
-.bom .row {
-  display: grid;
-  grid-template-columns: 22px 1fr auto 10px;
-  gap: 6px;
-  align-items: baseline;
-  padding: 2px 4px;
-  border-radius: 2px;
-  color: var(--ink);
-  line-height: 1.35;
-}
-.bom .row .n { color: var(--ink-soft); }
-.bom .row .dim { color: var(--ink-soft); font-size: 10px; white-space: nowrap; }
-.bom .row.part { cursor: default; }
-.bom .row.part:hover { background: rgba(0, 0, 0, 0.05); color: var(--ink-strong); }
-.bom .row.cable { grid-template-columns: 22px 1fr 10px; color: var(--ink-soft); }
-.bom .row.prov { display: block; color: var(--ink-soft); }
-.bom .flag { color: var(--ink-strong); }
-.bom .legend { margin-top: 8px; color: var(--ink-soft); font-size: 10px; }
+.bom .row.part { cursor: default; transition: color 120ms ease; }
+.bom .row.part:hover { color: var(--ink-strong); text-decoration: underline; text-underline-offset: 3px; }
+.bom .num { display: inline-block; min-width: 26px; color: var(--ink-soft); font-size: 10px; }
+.bom .soft, .bom .line { color: var(--ink-soft); }
+.bom .line span { white-space: nowrap; }
+.bom .legend { margin-top: 10px; color: var(--ink-soft); font-size: 10px; opacity: 0.8; }
 @media (max-width: 760px) { .node.bom { display: none; } }
 
 /* paper grain over everything (pointer-transparent) */
@@ -598,7 +582,6 @@ body.mode-empty .part-labels text { fill: #2f2fa8; stroke: none; font-size: 12px
   text-anchor: middle;
   dominant-baseline: central;
 }
-.bom .row .num { color: var(--ink-soft); font-size: 10px; margin-left: 4px; }
 
 /* pixel view: parts as circles, cables as thin lime lines */
 .diagram { pointer-events: none; opacity: 0; transition: opacity 300ms ease; }
