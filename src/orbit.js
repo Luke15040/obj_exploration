@@ -31,10 +31,12 @@ export function createOrbit(svg) {
   });
 
   svg.addEventListener('pointermove', (e) => {
-    pointer.nx = (e.clientX / view.vw) * 2 - 1;
-    pointer.ny = (e.clientY / view.vh) * 2 - 1;
+    // (a hidden or zero-size window must never feed Infinity/NaN into the camera)
+    pointer.nx = view.vw > 0 ? clamp((e.clientX / view.vw) * 2 - 1, -1, 1) : 0;
+    pointer.ny = view.vh > 0 ? clamp((e.clientY / view.vh) * 2 - 1, -1, 1) : 0;
     if (!drag || e.pointerId !== drag.id) return;
-    base.yaw = clamp(drag.yaw - (e.clientX - drag.x) * 0.35, C.yawRange[0], C.yawRange[1]);
+    const yaw = drag.yaw - (e.clientX - drag.x) * 0.35;
+    base.yaw = C.yawRange ? clamp(yaw, C.yawRange[0], C.yawRange[1]) : yaw;
     base.pitch = clamp(drag.pitch + (e.clientY - drag.y) * 0.3, C.pitchRange[0], C.pitchRange[1]);
   });
 
@@ -48,13 +50,16 @@ export function createOrbit(svg) {
 
   svg.addEventListener('dblclick', (e) => {
     if (!isBackground(e)) return;
-    const front = Math.abs(base.yaw) < 1 && Math.abs(base.pitch) < 1;
+    const wrapped = ((base.yaw % 360) + 540) % 360 - 180;   // -180..180
+    const front = Math.abs(wrapped) < 1 && Math.abs(base.pitch) < 1;
     setView(front ? '3/4' : 'front');
   });
 
+  /** Front or 3/4 — reached the short way round, however many turns the yaw has made. */
   function setView(name) {
-    if (name === 'front') { base.yaw = 0; base.pitch = 0; }
-    else { base.yaw = home.yaw; base.pitch = home.pitch; }
+    const goal = name === 'front' ? 0 : home.yaw;
+    base.yaw = goal + Math.round((base.yaw - goal) / 360) * 360;
+    base.pitch = name === 'front' ? 0 : home.pitch;
   }
 
   function update(dt) {

@@ -66,7 +66,7 @@ export function createNodes({ body }) {
 
   const tray = document.createElement('div');
   tray.className = 'tray hidden';
-  tray.innerHTML = '<div class="thumb"><img alt=""></div><div class="tray-text"><b></b></div>';
+  tray.innerHTML = '<div class="thumb"><img alt=""></div><div class="tray-text"><b></b><span class="hint">drag the reference ↙</span></div>';
   document.body.appendChild(tray);
   const thumb = tray.querySelector('.thumb');
   const thumbImg = thumb.querySelector('img');

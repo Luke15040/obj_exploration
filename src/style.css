@@ -487,6 +487,8 @@ body.is-dragging-ref .node.ref .slot:not(.filled) { border-color: var(--ink-soft
 .tray .thumb.lifted { opacity: 0.3; }
 .tray-text { display: flex; flex-direction: column; gap: 2px; }
 .tray-text b { font-weight: 400; color: var(--ink); }
+.tray-text .hint { font-size: 10px; color: var(--ink-soft); animation: hint-pulse 1.8s ease-in-out infinite; }
+@keyframes hint-pulse { 50% { opacity: 0.45; } }
 .drag-ghost {
   position: fixed;
   width: 54px;

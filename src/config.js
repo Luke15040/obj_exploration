@@ -63,8 +63,8 @@ export const CONFIG = {
     distance: 700,        // mm; perspective strength (larger = flatter)
     yaw: -28,             // default 3/4 view
     pitch: 14,
-    yawRange: [-80, 80],
-    pitchRange: [-12, 60],
+    yawRange: null,       // free: all the way round
+    pitchRange: [-35, 85],
     parallax: [4, 2.5],   // degrees of yaw / pitch that follow the cursor
   },
 

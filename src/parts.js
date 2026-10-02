@@ -247,15 +247,25 @@ function fitPrimitive(shape, rects, zBack, wall) {
   }
   // circle / regular polygon: inradius needed around the points, best centre height found by search
   const [n, rot] = POLY[shape] ?? [0, 0];
-  const need = (cy) => Math.max(...pts.map(([x, y]) => {
-    const q = [x - c[0], y - cy];
-    if (!n) return Math.hypot(q[0], q[1]);
-    let m = -Infinity;
-    for (let k = 0; k < n; k++) { const an = rot + (2 * Math.PI * k) / n; m = Math.max(m, q[0] * Math.cos(an) + q[1] * Math.sin(an)); }
-    return m;
-  }));
+  // side normals computed once; the search below calls need() a few dozen times
+  const nx = [], ny = [];
+  for (let k = 0; k < n; k++) { const an = rot + (2 * Math.PI * k) / n; nx.push(Math.cos(an)); ny.push(Math.sin(an)); }
+  const need = (cy) => {
+    let worst = -Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const qx = pts[i][0] - c[0], qy = pts[i][1] - cy;
+      let m;
+      if (!n) m = Math.hypot(qx, qy);
+      else { m = -Infinity; for (let k = 0; k < n; k++) { const v = qx * nx[k] + qy * ny[k]; if (v > m) m = v; } }
+      if (m > worst) worst = m;
+    }
+    return worst;
+  };
+  // coarse to fine: every 4 mm, then every 0.5 mm around the best
   let best = c[1], bestA = need(c[1]);
-  for (let dy = -40; dy <= 40; dy += 1) { const a = need(c[1] + dy); if (a < bestA) { bestA = a; best = c[1] + dy; } }
+  for (let dy = -40; dy <= 40; dy += 4) { const a = need(c[1] + dy); if (a < bestA) { bestA = a; best = c[1] + dy; } }
+  const coarse = best;
+  for (let dy = -4; dy <= 4; dy += 0.5) { const a = need(coarse + dy); if (a < bestA) { bestA = a; best = coarse + dy; } }
   return { kind: n ? 3 : 2, c: [c[0], best], h: [0, 0], a: bestA + wall, n, rot, z, round: 3 };
 }
 
@@ -388,7 +398,23 @@ function primLayout(shape, content, spk, knobCount, pad) {
   return { prim, spots };
 }
 
+/**
+ * The layout only changes when its inputs do, but it is asked for several times a
+ * frame (every render pass, the lists, the surface): keep the last few results,
+ * keyed by the inputs rounded to 0.01 mm. Callers must treat the result as read-only.
+ */
+const layoutCache = new Map();
 export function layoutParts(s) {
+  const key = JSON.stringify(s, (k, v) => (typeof v === 'number' ? Math.round(v * 100) / 100 : v));
+  const hit = layoutCache.get(key);
+  if (hit) return hit;
+  const L = computeLayout(s);
+  layoutCache.set(key, L);
+  if (layoutCache.size > 8) layoutCache.delete(layoutCache.keys().next().value);
+  return L;
+}
+
+function computeLayout(s) {
   const parts = [];
   const add = (key, lib, c, opts = {}) => {
     const scale = opts.scale ?? 1;
