@@ -1521,6 +1521,9 @@ uniform vec2  uGridOff;
 uniform vec3  uSkinCol;
 uniform vec3  uWheelCol;
 uniform vec3  uTypeColor[12];
+uniform float uMono;      // 1 = the grey version: tone-on-tone shape with a dot pattern, parts in greys
+uniform vec3  uDotCol;
+uniform float uDotStep;   // dot pitch, device px
 
 void main() {
   // the shape: whole cells
@@ -1529,6 +1532,12 @@ void main() {
   ivec2 c = ivec2(floor(f));
   float sid = floor(texelFetch(uG, clamp(c + 1, ivec2(0), lim), 0).r * 255.0 + 0.5);
   vec4 col = sid > 0.0 ? vec4(sid > 1.5 ? uWheelCol : uSkinCol, 1.0) : vec4(0.0);
+  if (uMono > 0.5 && sid > 0.0) {
+    // a fine, even dot pattern over the pixelated shape
+    vec2 g = mod(gl_FragCoord.xy - uGridOff, uDotStep) - 0.5 * uDotStep;
+    float r = max(0.7, uDotStep * 0.17);
+    col.rgb = mix(col.rgb, uDotCol, 1.0 - smoothstep(r - 0.5, r + 0.5, length(g)));
+  }
 
   // the parts: 3D, at full resolution, always in front of the flat shape
   vec2 o = (gl_FragCoord.xy - uCenterDev) / uFocal;
@@ -1567,6 +1576,13 @@ void main() {
         float spec = pow(max(dot(reflect(-L, n), -rd), 0.0), mat == M_METAL || mat == M_RIM || mat == M_GOLD ? 24.0 : 10.0);
         shaded += vec3(spec * (mat == M_METAL || mat == M_RIM || mat == M_GOLD ? 0.6 : 0.22));
         if (mat == M_LED_LIT) shaded = matColor(mat) * 1.2;
+        if (uMono > 0.5) {
+          // warm mauve greys (like the reference), softer contrast; lit LEDs turn white
+          float l = dot(shaded, vec3(0.299, 0.587, 0.114));
+          shaded = vec3(0.32 + 0.52 * l) * vec3(1.0, 0.965, 0.98);
+          if (mat == M_LED_OFF) shaded = vec3(0.37, 0.355, 0.36);     // dark cells, so the lit face reads
+          if (mat == M_LED_LIT || mat == M_WHITE) shaded = vec3(0.965, 0.96, 0.95);
+        }
         if (!isCable && idx == uHi) shaded = mix(shaded, vec3(0.1), 0.6);
         col = vec4(min(shaded, vec3(1.0)), 1.0);
         break;

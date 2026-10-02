@@ -119,12 +119,12 @@ export const CONFIG = {
 
   /** On light grey: ink dots and hairlines. */
   palette: {
-    dot: '#202022',       // dots and rings; outlines of fixed parts in the lines view
-    line: '#252527',      // component outlines
-    lineSoft: '#9a9a9e',  // secondary lines (wheel caps, display)
-    label: '#88888c',     // coordinate labels, ticks, crosshair
-    guide: '#c6c6ca',     // drag guide lines
-    blockLine: '#a2a2a6', // provisional block outlines (lines view)
+    dot: '#211f22',       // dots and rings; outlines of fixed parts in the lines view
+    line: '#262426',      // component outlines
+    lineSoft: '#9f9a93',  // secondary lines (wheel caps, display)
+    label: '#8d8983',     // coordinate labels, ticks, crosshair
+    guide: '#cdc8bf',     // drag guide lines
+    blockLine: '#a7a29a', // provisional block outlines (lines view)
     // solid view: flat tone bands, darkest → lightest
     solid: {
       fixedLo: '#1f1e1c', fixedHi: '#8d8a83', // real parts: ink
@@ -134,6 +134,8 @@ export const CONFIG = {
     // pixel view: halftone mosaic for the skin, circles + lines for parts and cables
     // "empty": blue ink outlines on graph paper
     empty: { ink: '#2f2fa8', hi: '#f0382c', paper: '#c9ccd6' },
+    // "empty" in look a (prototype): warm charcoal ink on a sand grid
+    emptyA: { ink: '#3a3732', hi: '#c4492e', paper: '#dcd8cf' },
     // "blob": metaballs, a few warm and cool families (order = part type index)
     blob: {
       parts: {

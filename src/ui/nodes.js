@@ -301,7 +301,7 @@ export function createNodes({ body }) {
   ];
   const shp = document.createElement('div');
   shp.className = 'node shp tool hidden';
-  shp.innerHTML = `<div class="tab">shape</div>
+  shp.innerHTML = `<div class="tab">primitives</div>
     <div class="card">
       <div class="forms">${FORMS.map(([k, label, icon]) => `<button data-form="${k}" title="${label}"><svg viewBox="0 0 24 24">${icon}</svg></button>`).join('')}</div>
     </div>`;
@@ -323,16 +323,40 @@ export function createNodes({ body }) {
     screen: '<svg viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="11" rx="1.5"/><path d="M9.5 19.5h5M12 16.5v3"/></svg>',
     speaker: '<svg viewBox="0 0 24 24"><path d="M5 9.5h3l4.5-4v13l-4.5-4H5z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
     energy: '<svg viewBox="0 0 24 24"><path d="M13 3.5 6.5 13.5H12l-1 7 6.5-10H12z"/></svg>',
-    shape: '<svg viewBox="0 0 24 24"><path d="M12 4.5l7.6 5.5-2.9 9H7.3l-2.9-9z"/></svg>',
+    shape: '<svg viewBox="0 0 24 24"><path d="M12 4.5l7.6 5.5-2.9 9H7.3l-2.9-9z"/></svg>',   // primitives
   };
   const TOOLS = { shape: shp, screen: scr, speaker: spk, energy: eng };
   const toolbox = document.createElement('div');
   toolbox.id = 'toolbox';
-  toolbox.innerHTML = '<span class="lbl">log</span>' + Object.keys(TOOLS).map((k) => `<button data-tool="${k}" title="${k}" aria-label="${k}">${TOOL_ICONS[k]}</button>`).join('');
+  const TOOL_NAMES = { shape: 'primitives', screen: 'screen', speaker: 'speaker', energy: 'energy source' };
+  toolbox.innerHTML = '<span class="lbl">log</span>' + Object.keys(TOOLS).map((k) => `<button data-tool="${k}" title="${TOOL_NAMES[k]}" aria-label="${TOOL_NAMES[k]}">${TOOL_ICONS[k]}</button>`).join('');
   document.body.appendChild(toolbox);
   // open / closed per tool; screen and speaker open by themselves when they arrive (prompts), energy on demand
   const open = { shape: true, screen: true, speaker: true, energy: false };
   const placed = {};      // tools the user dragged somewhere: { left, top } in px (otherwise they stack on the right)
+
+  /**
+   * Node header (look 1): the title in a dark tab with a slanted edge, and on the frame a drag
+   * grip and a button — × closes a tool; − tucks the references away (before the grip, as on
+   * the reference card). In look 2 the header melts away and the label sits on the border again.
+   */
+  const decorate = (node, glyph, title, onPress, buttonFirst = false) => {
+    const tab = node.querySelector('.tab');
+    const hdr = document.createElement('div');
+    hdr.className = 'hdr';
+    node.insertBefore(hdr, tab);
+    hdr.appendChild(tab);
+    const ctl = document.createElement('div');
+    ctl.className = 'ctl';
+    const grip = '<span class="grip" aria-hidden="true"></span>';
+    const btn = `<button class="x" title="${title}" aria-label="${title}">${glyph}</button>`;
+    ctl.innerHTML = buttonFirst ? btn + grip : grip + btn;
+    hdr.appendChild(ctl);
+    ctl.querySelector('.x').addEventListener('click', onPress);
+  };
+  for (const [k, node] of Object.entries(TOOLS)) decorate(node, '×', 'close', () => { open[k] = false; });
+  decorate(ref, '−', 'hide', () => ref.classList.add('hidden'), true);
+
 
   // drag a tool by its label (or any empty part of its card)
   for (const [k, node] of Object.entries(TOOLS)) {
@@ -385,8 +409,9 @@ export function createNodes({ body }) {
   // or a double-click on its label asks for a new spot)
   let placedKind = state.kind;
   function placeNodes() {
-    if (state.kind !== placedKind) {
-      placedKind = state.kind;
+    const lookNow = state.kind + (document.body.classList.contains('look-2') ? '2' : '1');   // the nodes change size with the look
+    if (lookNow !== placedKind) {
+      placedKind = lookNow;
       for (const k in placed) if (placed[k].auto) delete placed[k];
     }
     const pending = ['shape', 'screen', 'speaker', 'energy'].filter((k) => !TOOLS[k].classList.contains('hidden') && !placed[k]);
@@ -422,22 +447,24 @@ export function createNodes({ body }) {
       const [px, py] = t ? view.project(t[0], t[1], t[2]) : [cx, (y0 + y1) / 2];
       return { k, py, side: Math.abs(px - cx) < 24 ? prefer[k] : px < cx ? 'left' : 'right', w: TOOLS[k].offsetWidth, h: TOOLS[k].offsetHeight };
     }).sort((p, q) => p.py - q.py);
+    const hits = (x, y, w, h) => taken.find((r) => x < r.x + r.w + 12 && x + w + 12 > r.x && y < r.y + r.h + 14 && y + h + 14 > r.y);
+    const offList = (x, y, w, h) => !(list && x < list.right + 12 && y + h > list.top - 12 && y < list.bottom + 12);
     for (const it of items) {
-      let x = it.side === 'left' ? x0 - gap - it.w : x1 + gap;
-      x = Math.max(20, Math.min(rightEdge - it.w, x));
-      let y = Math.max(56, it.py - it.h / 2 - 40);
-      // never over the components list: go above it, or to its right
-      if (list && x < list.right + 12 && y + it.h > list.top - 12 && y < list.bottom + 12) {
-        if (list.top - it.h - 16 >= 56) y = list.top - it.h - 16;
-        else x = list.right + 16;
+      // try the part's side first, then the other one; on each, the nearest free height to the part
+      let x, y, found = false;
+      for (const side of [it.side, it.side === 'left' ? 'right' : 'left']) {
+        x = Math.max(20, Math.min(rightEdge - it.w, side === 'left' ? x0 - gap - it.w : x1 + gap));
+        const want = it.py - it.h / 2 - 40;
+        const top = 56, bottom = vh - it.h - 80;                           // below the top bar, above the prompts and the log
+        for (let d = 0; d <= vh && !found; d += 12) {
+          for (const cand of [want + d, want - d]) {
+            const yy = Math.max(top, Math.min(bottom, cand));
+            if (!hits(x, yy, it.w, it.h) && offList(x, yy, it.w, it.h)) { y = yy; found = true; break; }
+          }
+        }
+        if (found) break;
       }
-      // step down past any node already there
-      for (let guard = 0; guard < 8; guard++) {
-        const hit = taken.find((r) => x < r.x + r.w + 12 && x + it.w + 12 > r.x && y < r.y + r.h + 16 && y + it.h + 16 > r.y);
-        if (!hit) break;
-        y = hit.y + hit.h + 16;
-      }
-      y = Math.min(y, vh - it.h - 80);                                      // above the prompts and the log
+      if (!found) y = Math.max(56, it.py - it.h / 2 - 40);
       placed[it.k] = { left: Math.round(x), top: Math.round(y), auto: true };
       taken.push({ x, y, w: it.w, h: it.h });
       const n = TOOLS[it.k];
@@ -481,6 +508,9 @@ export function createNodes({ body }) {
     const S = CONFIG.screen;
     const top = view.project(state.screen.x, state.screen.y + S.h / 2 + 2, 0);
     drawLink(refLink, refOn, rb.right, rb.top + 44, top[0], top[1], 'L', dt);
+    // the offered image sits right of the references node, under its connector (free space)
+    tray.style.left = `${Math.round(rb.right + 24)}px`;
+    tray.style.top = `${Math.round(rb.top + 70)}px`;
 
     // reference travelling down the connector
     if (pulseT >= 0 && refOn) {

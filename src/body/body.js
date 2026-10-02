@@ -4,7 +4,7 @@ import { view } from '../view.js';
 import { Spring } from './springs.js';
 import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader } from './shaders.js';
 import { gbufferShader, edgeShader } from './blockshaders.js';
-import { createProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js';
+import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js';
 import { generateBlueNoise } from './bluenoise.js';
 import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js';
 import { holePattern } from '../speaker-patterns.js';
@@ -40,17 +40,25 @@ export function createBody(canvas) {
   const gl = canvas.getContext('webgl2', { antialias: false, alpha: true, premultipliedAlpha: true });
   if (!gl) throw new Error('WebGL2 is not available');
 
-  /** A shader program compiled on first use (each view only pays for its own). */
+  gl.getExtension('KHR_parallel_shader_compile');   // shaders compile on driver threads, off the page
+  /**
+   * A shader program built on first use; warm() starts its compile early in the background,
+   * so switching to a view later finds it ready instead of stalling.
+   */
   const lazy = (fs) => {
-    let p = null;
+    let p = null, started = null;
+    const warm = () => { if (!p && !started) started = startProgram(gl, vertexShader, fs); };
     const get = () => {
       if (!p) {
-        const pr = createProgram(gl, vertexShader, fs);
+        warm();
+        const pr = finishProgram(gl, started);
         p = { ...pr, quad: createFullscreenQuad(gl, pr.prog) };
       }
       return p;
     };
-    return { get prog() { return get().prog; }, get uniforms() { return get().uniforms; }, get quad() { return get().quad; } };
+    const ext = gl.getExtension('KHR_parallel_shader_compile');
+    const ready = () => !!p || (!!started && (!ext || gl.getProgramParameter(started.prog, ext.COMPLETION_STATUS_KHR)));
+    return { warm, ready, get started() { return !!(p || started); }, get prog() { return get().prog; }, get uniforms() { return get().uniforms; }, get quad() { return get().quad; } };
   };
   const level = lazy(levelShader);
   const ease = lazy(easeShader);
@@ -75,6 +83,19 @@ export function createBody(canvas) {
   const target = createTarget(gl);
   let cur = createTarget(gl);
   let prev = createTarget(gl);
+  // background warm-up of every view's shaders, in the order of the view switch
+  // (pixel 3d · dots · flat 1 · flat 2 · dither 1 · dither 2 · glass · empty), one every 350 ms
+  const WARM = { emptyC, pixel3d, cloud, flat2g, flat2e, flat, pixel, pixelD, pixel2, glass, emptyE };
+  const t0 = performance.now(), readyAt = {};
+  setTimeout(() => {
+    // hand them all to the driver at once (it compiles on its own threads), then just watch
+    for (const q of Object.values(WARM)) q.warm();
+    const watch = setInterval(() => {
+      for (const [k, q] of Object.entries(WARM)) if (!readyAt[k] && q.ready()) readyAt[k] = Math.round(performance.now() - t0);
+      if (Object.keys(readyAt).length === Object.keys(WARM).length) clearInterval(watch);
+    }, 200);
+  }, 1500);
+  window.__shaderStatus = () => ({ ...readyAt });   // debug: ms after load when each program was ready
   const gtarget = createTarget(gl); // full-res g-buffer for the blocks view
   // cross-fade weight of each view (1 = fully shown)
   const VIEWS = ['dots', 'blocks', 'flat', 'flat2', 'pixel', 'pixel2', 'empty', 'blob', 'orbital', 'pixel3d', 'glass'];
@@ -747,7 +768,7 @@ export function createBody(canvas) {
     gl.uniform1f(u.uLineW, Math.max(1, 1.25 * pxr()));
     const L = layout;
     gl.uniform1i(u.uHi, params.highlight && L ? L.parts.findIndex((p) => p.key === params.highlight) : -1);
-    const E = CONFIG.palette.empty;
+    const E = params.look === 1 ? CONFIG.palette.emptyA : CONFIG.palette.empty;
     gl.uniform3fv(u.uInk, hexToRgb(E.ink));
     gl.uniform3fv(u.uHiInk, hexToRgb(E.hi));
     gl.uniform3fv(u.uPaper, hexToRgb(E.paper));
@@ -891,8 +912,12 @@ export function createBody(canvas) {
     gl.uniform1f(u.uCellPx, cell);
     gl.uniform2f(u.uGridOff, off[0], off[1]);
     const C3 = pixel3dPalette();
-    gl.uniform3fv(u.uSkinCol, hexToRgb(params.pixel3dGrey ? '#b4b4b8' : state.kind === 'speaker' ? C3.skinSpeaker : C3.skin));
-    gl.uniform3fv(u.uWheelCol, hexToRgb(params.pixel3dGrey ? '#8c8c91' : C3.wheel));
+    // grey version: the shape just a touch darker than the page, with a dot pattern
+    gl.uniform3fv(u.uSkinCol, hexToRgb(params.pixel3dGrey ? '#e3e2df' : state.kind === 'speaker' ? C3.skinSpeaker : C3.skin));
+    gl.uniform3fv(u.uWheelCol, hexToRgb(params.pixel3dGrey ? '#d8d6d2' : C3.wheel));
+    gl.uniform1f(u.uMono, params.pixel3dGrey ? 1 : 0);
+    gl.uniform3fv(u.uDotCol, hexToRgb('#c9c7c2'));
+    gl.uniform1f(u.uDotStep, Math.max(3, cell / 2));
     if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], pixel3dColors);
     gl.bindVertexArray(pixel3d.quad);
     gl.drawArrays(gl.TRIANGLES, 0, 6);

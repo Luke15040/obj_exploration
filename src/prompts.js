@@ -378,5 +378,8 @@ export function createPrompts({ extras, body, nodes }) {
     if (move) placeSpeaker(move);
   }
 
+  // the page opens on case 2 · speaker
+  setCase('speaker');
+
   return { update, run, applyReference, setCase };
 }

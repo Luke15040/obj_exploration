@@ -41,13 +41,23 @@ export function createViewToggle({ orbit } = {}) {
     }
   });
 
-  // pixel 3d: colour or grey for the pixelated shape (bottom right, only in that view)
-  const grey = document.createElement('button');
-  grey.id = 'p3d-grey';
-  const markGrey = () => { grey.textContent = params.pixel3dGrey ? 'scale of gray' : 'coloured'; };
-  markGrey();
-  grey.addEventListener('click', () => { params.pixel3dGrey = !params.pixel3dGrey; markGrey(); });
-  document.body.appendChild(grey);
+  // the look (bottom right): look a = prototype (reference cards, warm, grey pixel 3d) ·
+  // look b = experiment (plain nodes, cool greys, colour pixel 3d)
+  const looks = document.createElement('div');
+  looks.id = 'looks';
+  looks.innerHTML = '<button data-look="1" title="prototype look">look a</button><button data-look="2" title="experiment look">look b</button>';
+  const markLook = () => {
+    params.pixel3dGrey = params.look === 1;
+    document.body.classList.toggle('look-1', params.look === 1);
+    document.body.classList.toggle('look-2', params.look === 2);
+    looks.querySelectorAll('button').forEach((b) => b.classList.toggle('on', Number(b.dataset.look) === params.look));
+  };
+  markLook();
+  looks.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-look]');
+    if (b) { params.look = Number(b.dataset.look); markLook(); }
+  });
+  document.body.appendChild(looks);
 
   set(params.view);
   return { set };

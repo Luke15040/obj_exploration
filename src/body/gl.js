@@ -2,25 +2,32 @@
  * Minimal WebGL2 helpers: just enough for one fullscreen quad and a texture.
  */
 
-function compile(gl, type, src) {
-  const sh = gl.createShader(type);
-  gl.shaderSource(sh, src);
-  gl.compileShader(sh);
-  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-    const log = gl.getShaderInfoLog(sh);
-    gl.deleteShader(sh);
-    throw new Error('shader compile failed:\n' + log);
-  }
-  return sh;
+/**
+ * Start compiling and linking without asking for the result: with KHR_parallel_shader_compile
+ * the driver works on it in the background until finishProgram() needs it.
+ */
+export function startProgram(gl, vsSrc, fsSrc) {
+  const prog = gl.createProgram();
+  const shaders = [[gl.VERTEX_SHADER, vsSrc], [gl.FRAGMENT_SHADER, fsSrc]].map(([type, src]) => {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    gl.attachShader(prog, sh);
+    return sh;
+  });
+  gl.linkProgram(prog);
+  return { prog, shaders };
 }
 
 export function createProgram(gl, vsSrc, fsSrc) {
-  const prog = gl.createProgram();
-  gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, vsSrc));
-  gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, fsSrc));
-  gl.linkProgram(prog);
+  return finishProgram(gl, startProgram(gl, vsSrc, fsSrc));
+}
+
+/** Wait for a started program (if it is not done yet), check it, and cache its uniform locations. */
+export function finishProgram(gl, { prog, shaders }) {
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-    throw new Error('program link failed:\n' + gl.getProgramInfoLog(prog));
+    const logs = shaders.map((sh) => gl.getShaderInfoLog(sh)).filter(Boolean).join('\n');
+    throw new Error('shader compile / link failed:\n' + logs + '\n' + gl.getProgramInfoLog(prog));
   }
 
   // cache every active uniform location by name

@@ -1,15 +1,15 @@
 :root {
-  /* light grey and ink */
-  --bg-center: #efeff0;
-  --bg-mid: #e7e7e8;
-  --bg-edge: #d7d7d9;
-  --ink: #1e1e20;
+  /* warm off-white and ink, in tune with the reference cards (sand frames, dark bodies) */
+  --bg-center: #f3f3f1;
+  --bg-mid: #f1f0ee;
+  --bg-edge: #e8e7e3;
+  --ink: #1f1e21;
   --ink-strong: #000000;
-  --ink-soft: #88888c;
-  --hair: #cdcdd0;      /* panel borders, rules */
-  --field: #f3f3f4;     /* inputs */
-  --surface: rgba(238, 238, 239, 0.88);   /* boxes, chips */
-  --surface-a: rgba(238, 238, 239, 0.94);
+  --ink-soft: #8b8985;
+  --hair: #d8d6d0;      /* panel borders, rules */
+  --field: #f5f5f3;     /* inputs */
+  --surface: rgba(245, 244, 241, 0.9);   /* boxes, chips */
+  --surface-a: rgba(245, 244, 241, 0.95);
   --accent: #1e1e20;    /* active links, travelling reference */
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
@@ -129,7 +129,7 @@ body.is-orbiting #components-layer { cursor: grabbing; }
 #prompt {
   position: fixed;
   left: 50%;
-  top: 64px;
+  top: 104px;
   transform: translateX(-50%);
   max-width: calc(100vw - 260px);
   font-size: 20px;
@@ -454,10 +454,11 @@ body.is-dragging-ref .node.ref .slot:not(.filled) { border-color: var(--ink-soft
 
 /* the offered reference image, under the prompt */
 .tray {
+  /* placed next to the references node by nodes.js, in the free space below its connector */
   position: fixed;
-  top: 106px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 210px;
+  left: 280px;
+  transform: none;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -469,7 +470,7 @@ body.is-dragging-ref .node.ref .slot:not(.filled) { border-color: var(--ink-soft
   z-index: 3;
   transition: opacity 300ms ease, transform 380ms cubic-bezier(0.2, 1.3, 0.4, 1);
 }
-.tray.hidden { opacity: 0; transform: translate(-50%, -8px); pointer-events: none; }
+.tray.hidden { opacity: 0; transform: translateY(-8px); pointer-events: none; }
 .tray .thumb {
   width: 54px;
   height: 54px;
@@ -527,17 +528,23 @@ body.is-dragging-ref, body.is-dragging-ref * { cursor: grabbing !important; }
 .scr .board { fill: none; stroke: var(--ink-soft); stroke-width: 0.5; }
 .scr .hole { fill: none; stroke: var(--ink-soft); stroke-width: 0.4; }
 .scr .glass { fill: #1d1d20; }
-.scr .px { fill: #3a3a40; }
+.scr .px { fill: #3b393c; }
 .scr .px.on { fill: #ff5ab4; }
 .scr .px.mono { fill: #f4f4f4; }
 .scr .smile { fill: none; stroke: #f4f4f4; stroke-width: 1.2; stroke-linecap: round; }
 /* pixel 3d: colour / grey shape switch, bottom right */
-#p3d-grey {
-  position: fixed; right: 20px; bottom: 22px; z-index: 3; display: none;
-  font: inherit; font-size: 11px; color: var(--ink); text-transform: lowercase;
-  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+/* look a / look b (bottom right), same pill as the case switch */
+#looks {
+  position: fixed; right: 20px; bottom: 22px; z-index: 3;
+  display: flex; border: 1px solid var(--hair); border-radius: 999px; overflow: hidden;
+  font-size: 11px; background: var(--surface);
 }
-body.mode-pixel3d #p3d-grey { display: block; }
+#looks button {
+  font: inherit; color: var(--ink-soft); background: none; border: 0; padding: 5px 14px; cursor: pointer;
+  text-transform: lowercase; transition: color 160ms ease, background 160ms ease;
+}
+#looks button.on { color: var(--bg-center); background: var(--ink); }
+#looks button:not(.on):hover { color: var(--ink-strong); }
 /* show / hide the tools (pill next to the case switch) */
 #tools-toggle {
   position: fixed; top: 20px; left: 240px; z-index: 3;
@@ -580,7 +587,7 @@ body.mode-pixel3d #p3d-grey { display: block; }
 .shp .forms button.on { color: var(--ink-strong); background: var(--bg-center); }
 .shp .forms svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
 /* energy source: compact, like the speaker */
-.node.tool.eng .card { width: 104px; padding: 10px 6px 6px; }
+.node.tool.eng .card { width: 132px; padding: 12px 8px 7px; }   /* wide enough for the 'energy source' label */
 .node.tool.eng .viz svg { width: 46px; margin: 0 auto; }
 .node.tool.eng .pick-name { margin-top: 0; font-size: 10px; }
 /* energy source drawings */
@@ -642,8 +649,9 @@ body::after {
 /* flat view: part numbers on the ink shapes (match the components list) */
 .part-labels { pointer-events: none; opacity: 0; transition: opacity 300ms ease; }
 body.mode-flat .part-labels, body.mode-pixel .part-labels, body.mode-empty .part-labels, body.mode-orbital .part-labels { opacity: 1; }
-body.mode-orbital .part-labels text { fill: #1e1e20; stroke: #efeff0; stroke-width: 3px; font-size: 11px; }
+body.mode-orbital .part-labels text { fill: #1e1e20; stroke: #f4f3f0; stroke-width: 3px; font-size: 11px; }
 body.mode-empty .part-labels text { fill: #2f2fa8; stroke: none; font-size: 12px; }
+body.look-1.mode-empty .part-labels text { fill: #3a3732; }
 .part-labels text {
   paint-order: stroke;
   stroke: rgba(0, 0, 0, 0.35);
@@ -662,3 +670,112 @@ body.mode-pixel .diagram { opacity: 1; }
 .diagram polyline { fill: none; stroke: #cfe81a; stroke-width: 1.6; stroke-linejoin: round; }
 .diagram g:nth-child(2) circle { fill: #1f4d36; }
 .diagram g:nth-child(3) { display: none; } /* parts are coloured cells in the mosaic now */
+
+/* ---------- look 2: the original cool greys ---------- */
+body.look-2 {
+  --bg-center: #efeff0; --bg-mid: #e7e7e8; --bg-edge: #d7d7d9;
+  --ink: #1e1e20; --ink-soft: #88888c; --hair: #cdcdd0; --field: #f3f3f4;
+  --surface: rgba(238, 238, 239, 0.88); --surface-a: rgba(238, 238, 239, 0.94);
+}
+/* in look 2 the node header melts away: the label sits on the border as before */
+.node .hdr { display: contents; }
+.node .ctl { display: none; }
+
+/* ---------- look 1: nodes (tools + references) as the reference cards ---------- */
+/* warm mid-grey bodies in a sand frame; the title tab and the body are joined with fillets */
+.node.tool, .node.ref {
+  --nd-frame: #d5cfc3; --nd-edge: #c7c0b2; --nd-body: #1d1c20; --nd-ink: #efede8; --nd-soft: #9a968e; --nd-cell: #2b2a2f;
+  --nd-tab-h: 28px;
+}
+body.look-1 .node.tool, body.look-1 .node.ref {
+  background: var(--nd-frame);
+  border: 1px solid var(--nd-edge);
+  border-radius: 10px;
+  padding: 4px;
+  text-transform: none;
+  box-shadow: 0 8px 22px rgba(60, 54, 44, 0.10);
+}
+body.look-1 .node .hdr { display: flex; align-items: stretch; justify-content: space-between; height: var(--nd-tab-h); }
+body.look-1 .node .ctl { display: flex; align-items: center; gap: 9px; padding: 0 9px 0 34px; }
+body.look-1 .node.tool .tab, body.look-1 .node.ref .tab {
+  position: relative;
+  top: auto; left: auto;
+  background: var(--nd-body);
+  color: var(--nd-ink);
+  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: var(--nd-tab-h);
+  padding: 0 4px 0 12px;
+  border-radius: 7px 0 0 0;
+  white-space: nowrap;
+  z-index: 0;
+}
+/* the slanted side of the tab, rounded where it turns at the top */
+body.look-1 .node.tool .tab::after, body.look-1 .node.ref .tab::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -12px;
+  width: 22px;
+  background: var(--nd-body);
+  border-top-right-radius: 5px;
+  transform: skewX(22deg);
+  transform-origin: top left;
+  z-index: -1;
+}
+/* the concave fillet where the slant meets the top of the body */
+body.look-1 .node.tool .tab::before, body.look-1 .node.ref .tab::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: calc(100% + 20px);
+  width: 6px;
+  height: 6px;
+  background: radial-gradient(circle at 100% 0, transparent 5.5px, var(--nd-body) 6px);
+}
+.node .ctl .grip { width: 11px; height: 11px; background: radial-gradient(circle, #6a675f 1.3px, transparent 1.6px) 0 0 / 5.5px 5.5px; }
+.node .ctl .x { font: inherit; font-size: 16px; line-height: 1; color: #6a675f; background: none; border: 0; padding: 0 1px 1px; cursor: pointer; }
+.node .ctl .x:hover { color: #34322d; }
+body.look-1 .node.tool .card, body.look-1 .node.ref .card {
+  background: var(--nd-body);
+  border: 0;
+  border-radius: 0 7px 7px 7px;
+  color: var(--nd-ink);
+}
+body.look-1 .node.tool .card { padding: 11px 9px 10px; }
+body.look-1 .node.tool.shp .card, body.look-1 .node.tool.scr .card, body.look-1 .node.tool.spk .card, body.look-1 .node.tool.eng .card { width: auto; }
+body.look-1 .node.tool.shp { width: 184px; }
+body.look-1 .node.tool.scr { width: 172px; }
+body.look-1 .node.tool.spk { width: 164px; }
+body.look-1 .node.tool.eng { width: 196px; }
+body.look-1 .node.tool .arrow { color: var(--nd-soft); }
+body.look-1 .node.tool .arrow:hover { color: var(--nd-ink); }
+body.look-1 .node.tool .pick-name { color: var(--nd-ink); }
+body.look-1 .spk .viz svg circle { fill: var(--nd-ink); }
+body.look-1 .spk .seg button { color: var(--nd-soft); }
+body.look-1 .spk .seg button:hover, body.look-1 .spk .seg button.on { color: var(--nd-ink); }
+body.look-1 .scr .board, body.look-1 .scr .hole { stroke: #8f8b83; }
+body.look-1 .scr .glass { fill: #0b0b0d; stroke: #3b3a3e; stroke-width: 0.4; }
+body.look-1 .eng .board, body.look-1 .eng .cable { stroke: #b8b3aa; }
+body.look-1 .eng .glass { fill: #0b0b0d; }
+body.look-1 .eng .bolt { fill: var(--nd-ink); }
+body.look-1 .shp .forms { gap: 4px; }
+body.look-1 .shp .forms button { height: 40px; color: var(--nd-ink); }
+body.look-1 .shp .forms button:hover { color: #ffffff; }
+body.look-1 .shp .forms button.on { color: var(--nd-ink); background: none; }
+body.look-1 .shp .forms button.on svg { fill: var(--nd-ink); }
+body.look-1 .shp .forms svg { width: 23px; height: 23px; stroke-width: 1.5; }
+body.look-1 .node.ref .card { padding: 6px; }
+body.look-1 .node.ref .slots { grid-template-columns: repeat(2, 72px); gap: 5px; }
+body.look-1 .node.ref .slot { width: 72px; height: 72px; border: 0; border-radius: 5px; background: var(--nd-cell); color: var(--nd-soft); font-size: 15px; }
+body.look-1 .node.ref .slot.filled { background: #bdbab4; }
+body.look-1 .node.ref .slot.filled:hover, body.look-1 .node.ref .slot.hover { box-shadow: inset 0 0 0 1px var(--nd-ink); color: var(--nd-ink); }
+body.look-1.is-dragging-ref .node.ref .slot:not(.filled) { color: var(--nd-ink); box-shadow: inset 0 0 0 1px var(--nd-soft); }
+body.look-1 .tray { background: #1d1c20; border: 4px solid #d5cfc3; border-radius: 10px; color: #efede8; box-shadow: 0 8px 22px rgba(60, 54, 44, 0.10); }
+body.look-1 .tray .thumb { border-color: #3b3a3e; border-radius: 5px; }
+body.look-1 .tray-text b { color: #efede8; }
+body.look-1 .tray-text .hint { color: #9a968e; }

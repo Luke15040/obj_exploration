@@ -7,7 +7,7 @@ regulator), laid out with clearance and real cables; everything else (the shell,
 wheels, knob caps) is provisional and drawn as the "body".
 
 - **case 1 · robot** — two wheels and an LED-matrix face; prompts: frog, wall-e, speak
-- **case 2 · speaker** — a speaker box; free skin or primitive shapes (box, cylinder,
+- **case 2 · speaker** (opens first) — a speaker box; free skin or primitive shapes (box, cylinder,
   prism, hexagon, pentagon, octagon, dome) or a random **totem**, with the speaker
   and knobs placing themselves on the faces
 - **views** — pixel 3d (opens first, front view), dots, flat 1, flat 2, dither 1, dither 2, glass, empty
