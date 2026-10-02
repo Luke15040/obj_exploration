@@ -2,7 +2,7 @@ import { CONFIG } from '../config.js';
 import { state } from '../state.js';
 import { view } from '../view.js';
 import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js';
-import { setSpeakerPattern, setScreenType, setPower } from '../state.js';
+import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js';
 import { SCREENS } from '../config.js';
 import { refImageURL, REF_LABELS } from './refimages.js';
 import { playVoice } from './sound.js';
@@ -149,7 +149,8 @@ export function createNodes({ body }) {
         <div class="viz"><svg viewBox="0 0 64 48">${holesSvg(state.speakerPattern)}</svg></div>
         <button class="arrow" data-step="1" title="next pattern">›</button>
       </div>
-      <div class="seg">${['beep', 'chirp', 'hum'].map((v) => `<button data-voice="${v}">${v}</button>`).join('')}</div>
+      <div class="seg types"><button data-spk="speaker" title="Seeed 4Ω 5W · 50 × 45 × 22">5 w</button><button data-spk="speakerSmall" title="Seeed 6Ω 2W · 28 × 31 × 15">2 w</button></div>
+      <div class="seg voices" hidden>${['beep', 'chirp', 'hum'].map((v) => `<button data-voice="${v}">${v}</button>`).join('')}</div>
     </div>`;
   document.body.appendChild(spk);
   const spkLink = makeLink('ink');
@@ -167,13 +168,21 @@ export function createNodes({ body }) {
 
   const currentSpeaker = () => state.extras.find((e) => e.type === 'speaker');
   const syncSound = () => {
-    spk.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.voice === sound.voice));
+    spk.querySelectorAll('.voices button').forEach((b) => b.classList.toggle('on', b.dataset.voice === sound.voice));
+    spk.querySelectorAll('.types button').forEach((b) => b.classList.toggle('on', b.dataset.spk === state.speakerLib));
     const e = currentSpeaker();
     if (e) e.sound = { voice: sound.voice }; // read by snapshot() for the later CAD step
   };
   // picking a sound plays it
-  spk.querySelectorAll('.seg button').forEach((b) =>
+  spk.querySelectorAll('.voices button').forEach((b) =>
     b.addEventListener('click', () => { sound.voice = b.dataset.voice; syncSound(); play(); }));
+  // which speaker: the two Seeed enclosed speakers that plug into the HAT
+  spk.querySelectorAll('.types button').forEach((b) => b.addEventListener('click', () => {
+    setSpeakerLib(b.dataset.spk);
+    syncSound();
+    const e = currentSpeaker();
+    if (e) { const [x, y] = view.project(...e.p); body.ripple(x, y); }
+  }));
   syncSound();
 
   function play() {

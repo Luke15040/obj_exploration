@@ -183,6 +183,19 @@ vec2 respeakerModel(vec3 q) {
 }
 
 // ---- Seeed mono enclosed speaker · local z = facing out ----
+// ---- Seeed mono enclosed speaker 6Ω 2W (QY2831F16) · local x = width, y = up, z = out ----
+// box 28 × 31 × 15, two mounting ears (44 across, Ø2 holes 36.5 apart), rubber surround + metal dome
+vec2 speakerSmallModel(vec3 q) {
+  vec2 r = vec2(pRBox(q, vec3(14.0, 15.5, 7.5), 1.0), M_BLACK);
+  float ears = pRBox(q - vec3(0.0, -4.0, -6.0), vec3(22.0, 4.0, 1.5), 3.5);
+  ears = max(ears, -(length(vec2(abs(q.x) - 18.25, q.y + 4.0)) - 1.0));
+  r = pU(r, vec2(ears, M_BLACK));
+  r.x = max(r.x, -max(length(q.xy) - 12.0, abs(q.z - 7.5) - 0.8));               // cone recess
+  r = pU(r, vec2(max(abs(length(q.xy) - 9.5) - 2.2, abs(q.z - 6.8) - 0.5), M_RUBBER));
+  r = pU(r, vec2(max(length(q.xy) - 7.3, abs(q.z - 6.9) - 0.5), M_METAL));
+  return r;
+}
+
 vec2 speakerModel(vec3 q) {
   vec2 r = vec2(pRBox(q, vec3(25.0, 22.5, 11.0), 3.0), M_BLACK);
   r.x = max(r.x, -max(length(q.xy) - 19.0, abs(q.z - 11.0) - 0.9));           // grille recess
@@ -309,7 +322,7 @@ vec2 partModel(int i, vec3 p) {
   if (t == 1) return featherModel(q);
   if (t == 2) return piZeroModel(q);
   if (t == 3) return respeakerModel(q);
-  if (t == 4) return speakerModel(q);
+  if (t == 4) return uPartH[i].y < 18.0 ? speakerSmallModel(q) : speakerModel(q);
   if (t == 5) return encoderModel(q);
   if (t == 6) return matrixModel(q);
   if (t == 7) return adapterModel(q);

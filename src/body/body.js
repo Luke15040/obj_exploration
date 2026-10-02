@@ -228,6 +228,7 @@ export function createBody(canvas) {
       kind: state.kind,
       screen: state.screenType,
       withScreen: state.withScreen,
+      speakerLib: state.speakerLib,
       power: state.power,
       shape: state.shape,
       totem: state.totem,
@@ -369,7 +370,8 @@ export function createBody(canvas) {
       gl.uniform3fv(u['uExtraN[0]'], extraN);
       gl.uniform4fv(u['uExtraInfo[0]'], extraInfo);
     }
-    gl.uniform3f(u.uSpk, X.speaker.r, X.speaker.hole, X.speaker.depth);
+    const SG = state.speakerLib === 'speakerSmall' ? X.speaker.small : X.speaker;
+    gl.uniform3f(u.uSpk, SG.r, SG.hole, X.speaker.depth);
     // speaker grille pattern and LED drawing
     if (holeKey !== state.speakerPattern) {
       holeKey = state.speakerPattern;

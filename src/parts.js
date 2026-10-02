@@ -60,6 +60,14 @@ export const LIBRARY = {
     size: [50, 45, 22], // local z = facing out through the hole pattern
     connectors: { lead: { p: [0, -16, -12.6], d: [0, 0, -1] } },
   },
+  speakerSmall: {
+    name: 'Seeed mono enclosed speaker 6Ω 2W', short: 'speaker 6Ω 2w',
+    url: 'https://www.seeedstudio.com/Mono-Enclosed-Speaker-2W-6-Ohm-p-2832.html',
+    type: 4,
+    // QY2831F16-6R4F-PO datasheet: body 28 × 31 × 15, mounting ears 44 wide (Ø2 holes at 36.5); JST 2.0 lead
+    size: [44, 31, 15],
+    connectors: { lead: { p: [0, -15.5, -5], d: [0, 0, -1] } },
+  },
   encoder: {
     name: 'Adafruit I2C STEMMA QT rotary encoder with NeoPixel', short: 'rotary encoder',
     url: 'https://www.adafruit.com/product/5880',
@@ -250,6 +258,7 @@ function route(a, b, via = null) {
  *   kind: 'robot' (case 1, default) | 'speaker' (case 2: a speaker box, no wheels)
  *   screen (case 1): which display — 'matrix' (default) or 'oled'
  *   withScreen (case 2): add a screen above the speaker
+ *   speakerLib: 'speaker' (Seeed 4Ω 5W, default) or 'speakerSmall' (Seeed 6Ω 2W)
  *   power: 'battery' (default) or 'wall' (USB-C PD module + a cable out to the wall)
  *   shape (case 2): one of SHAPES · knobCount: knobs to make room for (primitives)
  * @returns {{ parts, chassis, neck, cables, offsets }}
@@ -333,7 +342,7 @@ function profileY(P) {
  * A random totem: a stack of primitives, each with one job — the electronics at the
  * bottom, then the speaker, then one per knob — every add-on on its shape's front.
  */
-function totemLayout(shapes, content, knobCount, pad, screenSize = null) {
+function totemLayout(shapes, content, knobCount, pad, screenSize = null, spkSize = LIBRARY.speaker.size) {
   const wall = pad, overlap = 2;
   const levels = 2 + (screenSize ? 1 : 0) + knobCount;
   // only the top level may have a point or a dome; every other one is flat on both sides
@@ -342,7 +351,7 @@ function totemLayout(shapes, content, knobCount, pad, screenSize = null) {
     return i === levels - 1 || FLAT_BOTH.includes(k) ? k : FLAT_BOTH[(i + k.length) % FLAT_BOTH.length];
   };
   // all levels share one generous depth: a solid stack, not cut-outs
-  const zBack = Math.min(Math.min(...content.map((b) => b.lo[2])) - pad, -(LIBRARY.speaker.size[2] + 2 * pad), -TOTEM_DEPTH);
+  const zBack = Math.min(Math.min(...content.map((b) => b.lo[2])) - pad, -(spkSize[2] + 2 * pad), -TOTEM_DEPTH);
   const prims = [], spots = [];
   const flat = (b) => ({ lo: [b.lo[0], b.lo[1]], hi: [b.hi[0], b.hi[1]] });
   const base = fitPrimitive(shapeAt(0), content.map(flat), zBack, wall);
@@ -356,7 +365,7 @@ function totemLayout(shapes, content, knobCount, pad, screenSize = null) {
     spots.push({ type, p: [0, dy, 0], n: [0, 0, 1] });
     top = profileY(P)[1];
   };
-  const sp = LIBRARY.speaker.size;
+  const sp = spkSize;
   stack(shapeAt(1), sp[0], sp[1], 'speaker');
   if (screenSize) stack(shapeAt(2), screenSize[0] + 4, screenSize[1] + 4, 'screen');   // a level just for the screen
   const k0 = screenSize ? 3 : 2;
@@ -481,6 +490,9 @@ function computeLayout(s) {
   };
   // case 2: a speaker box — no wheels, no drive; the speaker and the knobs face front
   const box2 = s.kind === 'speaker';
+  // which speaker (both from Seeed, JST 2.0 into the ReSpeaker HAT)
+  const spkLib = s.speakerLib ?? 'speaker';
+  const SPK = LIBRARY[spkLib].size;
   // energy source: the LiPo, or (wall-powered) the USB-C PD module in its place
   const wall = s.power === 'wall';
   const powerLib = wall ? 'pdTrigger' : 'battery';
@@ -532,8 +544,8 @@ function computeLayout(s) {
   } else {
     // a speaker box always plays sound: Pi Zero 2 W + ReSpeaker HAT (its amplifier drives the speaker).
     // Everything electronic sits in a layer behind the speaker module, battery at the bottom.
-    back = -(s.pad + LIBRARY.speaker.size[2] + CLEARANCE + LIBRARY.battery.size[2] / 2);
-    const base = -LIBRARY.speaker.size[1] / 2;
+    back = -(s.pad + SPK[2] + CLEARANCE + LIBRARY.battery.size[2] / 2);
+    const base = -SPK[1] / 2;
     battery = add('battery', powerLib, [0, base + LIBRARY.battery.size[1] / 2, back], { rank: 1 });
     // free skin: the regulator beside the battery; primitive shapes: behind it (keeps the profile compact)
     buck = prim
@@ -548,19 +560,19 @@ function computeLayout(s) {
   const scrLib = s.screen ?? 'matrix';
   const scrSize = LIBRARY[scrLib].size;
   let screenAt = null;
-  if (box2 && s.withScreen) screenAt = [0, LIBRARY.speaker.size[1] / 2 + CLEARANCE + 2 + scrSize[1] / 2, 0];
+  if (box2 && s.withScreen) screenAt = [0, SPK[1] / 2 + CLEARANCE + 2 + scrSize[1] / 2, 0];
 
   // case 2 primitive: shape and add-on spots from the electronics as placed (before any relaxing),
   // so the CPU surface and the shader always agree
   let shaped = null;
   if (prim) {
     const content = [battery, buck, brain, hat].map((p) => ({ lo: p.c.map((v, k) => v - p.h[k]), hi: p.c.map((v, k) => v + p.h[k]) }));
-    const sd = LIBRARY.speaker.size, zc = -(sd[2] / 2 + s.pad);
+    const sd = SPK, zc = -(sd[2] / 2 + s.pad);
     const spk = { lo: [-sd[0] / 2, -sd[1] / 2, zc - sd[2] / 2], hi: [sd[0] / 2, sd[1] / 2, zc + sd[2] / 2] };
     if (shape === 'totem') {
       const pool = s.totem?.length ? s.totem : ['box', 'cylinder', 'prism', 'hexagon', 'dome', 'octagon'];
       const shapes = Array.from({ length: 3 + MAX_PARTS }, (_, i) => pool[i % pool.length]);
-      shaped = totemLayout(shapes, content, s.knobCount ?? knobs.length, s.pad, screenAt ? scrSize : null);
+      shaped = totemLayout(shapes, content, s.knobCount ?? knobs.length, s.pad, screenAt ? scrSize : null, SPK);
       for (const p of [battery, buck, brain, hat]) p.c[1] += shaped.dy;   // the electronics move with their level
       if (screenAt) screenAt = shaped.spots.find((q) => q.type === 'screen').p.slice();
       shaped.spots = shaped.spots.filter((q) => q.type !== 'screen');
@@ -582,8 +594,8 @@ function computeLayout(s) {
   // a speaker box has a flat front: modules mounted on it face straight ahead
   const faceOf = (n) => (box2 && n[2] > 0.6 ? [0, 0, 1] : n);
   const spkParts = speakers.map((e, i) => {
-    const d = LIBRARY.speaker.size[2] * e.scale, n = faceOf(e.n);
-    return add(`speaker-${i}`, 'speaker', e.p.map((v, k) => v - n[k] * (d / 2 + s.pad)), { R: frameFromNormal(n), scale: e.scale, fixed: true });
+    const d = SPK[2] * e.scale, n = faceOf(e.n);
+    return add(`speaker-${i}`, spkLib, e.p.map((v, k) => v - n[k] * (d / 2 + s.pad)), { R: frameFromNormal(n), scale: e.scale, fixed: true });
   });
   const encParts = knobs.map((e, i) => {
     const d = LIBRARY.encoder.size[2] * e.scale, n = faceOf(e.n);

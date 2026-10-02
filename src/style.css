@@ -129,7 +129,7 @@ body.is-orbiting #components-layer { cursor: grabbing; }
 #prompt {
   position: fixed;
   left: 50%;
-  top: 24px;
+  top: 64px;
   transform: translateX(-50%);
   max-width: calc(100vw - 260px);
   font-size: 20px;
@@ -455,7 +455,7 @@ body.is-dragging-ref .node.ref .slot:not(.filled) { border-color: var(--ink-soft
 /* the offered reference image, under the prompt */
 .tray {
   position: fixed;
-  top: 66px;
+  top: 106px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -590,6 +590,8 @@ body.mode-pixel3d #p3d-grey { display: block; }
 .spk .viz.beat svg { animation: beat 260ms ease-out; }
 @keyframes beat { 30% { transform: scale(1.12); fill: #e2472f; } }
 .spk .seg { display: flex; justify-content: space-between; }
+.spk .seg.types { justify-content: center; gap: 10px; margin-bottom: 2px; }
+.spk .seg.voices[hidden] { display: none; }
 .spk .seg button {
   font: inherit;
   border: 0;

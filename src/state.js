@@ -13,6 +13,7 @@ export const state = {
   shape: 'free', // case 2: 'free' (organic skin), a primitive (see SHAPES in parts.js) or 'totem'
   totem: [],     // case 2 totem: the shape of each level, bottom up (electronics, speaker, knobs)
   speakerPattern: 'rings', // hole pattern of the speaker grille (see speaker-patterns.js)
+  speakerLib: 'speaker',   // which speaker: 'speaker' (Seeed 4Ω 5W) | 'speakerSmall' (Seeed 6Ω 2W)
   screenType: 'matrix',    // case 1 display: 'matrix' | 'oled' (CONFIG SCREENS)
   power: 'battery',        // energy source: 'battery' | 'wall'
   withScreen: false,       // case 2: a screen was added ('+ screen')
@@ -119,6 +120,7 @@ export function setLinked(linked) {
 
 /** Speaker grille pattern and LED matrix drawing (no layout change, so no emit needed). */
 export function setSpeakerPattern(name) { state.speakerPattern = name; }
+export function setSpeakerLib(lib) { state.speakerLib = lib; emit(); }
 export function setLed(i, on) { state.leds[i] = on; }
 
 /** Case 2: add / remove a screen. */
@@ -268,6 +270,7 @@ export function snapshot() {
         kind: state.kind,
         screen: state.screenType,
         withScreen: state.withScreen,
+        speakerLib: state.speakerLib,
         power: state.power,
         shape: state.shape,
         totem: state.totem,

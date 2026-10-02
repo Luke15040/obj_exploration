@@ -308,7 +308,8 @@ export function createExtras(svg, { onPulse, offsets = () => [] } = {}) {
       if (r.type === 'speaker') {
         // hole pattern (the same list the shader gets)
         const [u, v] = basis(n);
-        const R = def.r * s, hr = Math.max(0.05, def.hole * s);
+        const sg = state.speakerLib === 'speakerSmall' ? def.small : def;   // the small speaker has a smaller grille
+        const R = sg.r * s, hr = Math.max(0.05, sg.hole * s);
         const holes = holePattern(state.speakerPattern).map(([x, y]) => add(p, add(mul(u, x * R), mul(v, y * R))));
         const visible = facing(n, p);
         const rings = holes.map((h) => pathOf(circle3(h, n, hr, 12), true)).join(' ');

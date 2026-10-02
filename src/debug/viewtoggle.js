@@ -11,9 +11,9 @@ const LABELS = { dots: 'dots', blocks: 'lines', flat: 'flat 2', flat2: 'flat 1',
 export function createViewToggle({ orbit } = {}) {
   const root = document.createElement('div');
   root.id = 'viewtoggle';
-  // pixel 3d first, in a pill of its own; the other views together
+  // one pill, pixel 3d first
   const btns = (list) => list.map((m) => `<button data-view="${m}">${LABELS[m]}</button>`).join('');
-  root.innerHTML = `<div class="grp">${btns(MODES.slice(0, 1))}</div><div class="grp">${btns(MODES.slice(1))}</div>`;
+  root.innerHTML = `<div class="grp">${btns(MODES)}</div>`;
   document.body.appendChild(root);
 
   let current = null;

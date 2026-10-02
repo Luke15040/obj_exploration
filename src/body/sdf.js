@@ -55,6 +55,7 @@ function currentLayout() {
     kind: state.kind,
     screen: state.screenType,
     withScreen: state.withScreen,
+    speakerLib: state.speakerLib,
     power: state.power,
     shape: state.shape,
     totem: state.totem,
@@ -75,7 +76,7 @@ function currentLayout() {
 /** Case 2 primitive: where the add-ons go when there are `knobCount` knobs (null on the free skin). */
 export function shapeSpots(knobCount) {
   return layoutParts({
-    kind: state.kind, screen: state.screenType, withScreen: state.withScreen, power: state.power, shape: state.shape, totem: state.totem, knobCount,
+    kind: state.kind, screen: state.screenType, withScreen: state.withScreen, speakerLib: state.speakerLib, power: state.power, shape: state.shape, totem: state.totem, knobCount,
     wl: [state.wheels.left.x, state.wheels.left.y], wr: [state.wheels.right.x, state.wheels.right.y],
     scr: [state.screen.x, state.screen.y], pad: state.body.padding, neckR: state.body.neckR,
     extras: [], wheelHalfW: CONFIG.wheel.w / 2, screenHalfH: CONFIG.screen.h / 2,

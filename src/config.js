@@ -82,7 +82,7 @@ export const CONFIG = {
    */
   extras: {
     max: 6,
-    speaker: { r: 12, hole: 1.6, depth: 4, snap: 8 }, // r = radius of the hole pattern
+    speaker: { r: 12, hole: 1.6, depth: 4, snap: 8, small: { r: 8, hole: 1.3 } }, // r = radius of the hole pattern (small = the 2 W speaker)
     knob: { r: 7.25, h: 11.5, boss: 12, snap: 34, angleRange: [-135, 135] }, // ≈ slim rubber knob Ø14.5 × 11.5
   },
 
