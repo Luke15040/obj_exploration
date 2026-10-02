@@ -121,17 +121,6 @@ const SPEAKER_BOX = [
   },
 ];
 
-const SHAPE_ICONS = {
-  free: '<path d="M6 13.5c-1.5-4 1.5-8.5 6-8 3 .3 3.2 2.6 5.6 3.6 2.4 1 2.2 5.2-.6 7.4-2.4 1.9-4.6 3-7.4 2.4C7.6 18.5 6.7 15.4 6 13.5z"/>',
-  box: '<rect x="5" y="5" width="14" height="14" rx="1.5"/>',
-  cylinder: '<circle cx="12" cy="12" r="7.5"/>',
-  prism: '<path d="M12 4.5 20 19H4z"/>',
-  hexagon: '<path d="M8 5h8l4 7-4 7H8l-4-7z"/>',
-  pentagon: '<path d="M12 4.5l7.6 5.5-2.9 9H7.3l-2.9-9z"/>',
-  octagon: '<path d="M9 4.5h6l4.5 4.5v6L15 19.5H9L4.5 15V9z"/>',
-  dome: '<path d="M4.5 17a7.5 7.5 0 0 1 15 0z"/>',
-  totem: '<rect x="8" y="3.5" width="8" height="5" rx="1"/><circle cx="12" cy="12.5" r="3.2"/><path d="M6.5 20.5 12 15.9l5.5 4.6z"/>',
-};
 
 /** Prompts per case: 1 robot, 2 speaker box. */
 export const PRESETS = { robot: ROBOT, speaker: SPEAKER_BOX };
@@ -181,20 +170,10 @@ export function createPrompts({ extras, body, nodes }) {
     if (k && k !== state.kind && !busy) setCase(k);
   });
 
-  // case 2: the skin's shape — free, or a primitive the parts settle into
-  const forms = document.createElement('div');
-  forms.id = 'shapetoggle';
-  forms.innerHTML = [...SHAPES, 'totem'].map((k) => `<button data-form="${k}" title="${k === 'totem' ? 'random totem' : k}" aria-label="${k}"${k === 'totem' ? ' class="dice"' : ''}><svg viewBox="0 0 24 24">${SHAPE_ICONS[k]}</svg></button>`).join('');
-  document.body.appendChild(forms);
-  const markForm = () => {
-    forms.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.form === state.shape));
-    document.body.classList.toggle('kind-speaker', state.kind === 'speaker');
-  };
+  // case 2: the skin's shape is picked in the "shape" tool node (ui/nodes.js), which calls setForm
+  const markForm = () => document.body.classList.toggle('kind-speaker', state.kind === 'speaker');
   markForm();
-  forms.addEventListener('click', (e) => {
-    const k = e.target.closest('[data-form]')?.dataset.form;
-    if (k && !busy) setForm(k);
-  });
+  nodes.onShape = (k) => { if (!busy) setForm(k); };
 
   /** Change the case-2 shape: the speaker and the knobs move to its spots. The totem re-rolls on every click. */
   function setForm(k) {

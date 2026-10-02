@@ -563,11 +563,17 @@ body.is-dragging-ref, body.is-dragging-ref * { cursor: grabbing !important; }
 #toolbox button:not(.on):hover { color: var(--ink-strong); }
 /* tool nodes stack on the right (their top is set by nodes.js); left of the shape column in case 2 */
 .node.tool { right: 20px; transition: opacity 320ms ease; }
-body.kind-speaker .node.tool { right: 70px; }
 /* screen: compact too */
 .node.tool.scr .card { width: 132px; }
 .node.tool.scr .viz svg { width: 76px; margin: 0 auto; }
 .node.tool.scr .pick-name { margin-top: 2px; font-size: 10px; }
+/* shape tool: six forms in a 3 × 2 grid */
+.node.tool.shp .card { width: 132px; padding: 12px 8px 8px; }
+.shp .forms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+.shp .forms button { height: 34px; display: grid; place-items: center; padding: 0; background: none; border: 0; border-radius: 3px; color: var(--ink-soft); cursor: pointer; }
+.shp .forms button:hover { color: var(--ink-strong); }
+.shp .forms button.on { color: var(--ink-strong); background: var(--bg-center); }
+.shp .forms svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
 /* energy source: compact, like the speaker */
 .node.tool.eng .card { width: 104px; padding: 10px 6px 6px; }
 .node.tool.eng .viz svg { width: 46px; margin: 0 auto; }

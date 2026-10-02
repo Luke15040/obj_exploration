@@ -22,6 +22,7 @@ const easeOut = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
 export function createNodes({ body }) {
   /** Called with a reference id ('frog' | 'walle') when it should be applied. */
   let onApply = () => {};
+  let onShape = () => {};
 
   // connector layer, between the 3D parts and the cards
   const links = document.createElementNS(NS, 'svg');
@@ -278,20 +279,49 @@ export function createNodes({ body }) {
     if (p) { const [x, y] = view.project(...p.c); body.ripple(x, y); }
   }));
 
+  /* ---------- shape node (case 2): the skin's form ---------- */
+
+  const FORMS = [
+    ['free', 'free form', '<path d="M6 13.5c-1.5-4 1.5-8.5 6-8 3 .3 3.2 2.6 5.6 3.6 2.4 1 2.2 5.2-.6 7.4-2.4 1.9-4.6 3-7.4 2.4C7.6 18.5 6.7 15.4 6 13.5z"/>'],
+    ['box', 'square', '<rect x="5" y="5" width="14" height="14" rx="1.5"/>'],
+    ['pentagon', 'pentagon', '<path d="M12 4.5l7.6 5.5-2.9 9H7.3l-2.9-9z"/>'],
+    ['hexagon', 'hexagon', '<path d="M8 5h8l4 7-4 7H8l-4-7z"/>'],
+    ['dome', 'semicircle', '<path d="M4.5 17a7.5 7.5 0 0 1 15 0z"/>'],
+    ['totem', 'modular', '<rect x="8" y="3.5" width="8" height="5" rx="1"/><circle cx="12" cy="12.5" r="3.2"/><path d="M6.5 20.5 12 15.9l5.5 4.6z"/>'],
+  ];
+  const shp = document.createElement('div');
+  shp.className = 'node shp tool hidden';
+  shp.innerHTML = `<div class="tab">shape</div>
+    <div class="card">
+      <div class="forms">${FORMS.map(([k, label, icon]) => `<button data-form="${k}" title="${label}"><svg viewBox="0 0 24 24">${icon}</svg></button>`).join('')}</div>
+    </div>`;
+  document.body.appendChild(shp);
+  const drawShape = () => {
+    shp.querySelectorAll('[data-form]').forEach((b) => b.classList.toggle('on', b.dataset.form === state.shape));
+  };
+  drawShape();
+  shp.querySelector('.forms').addEventListener('click', (e) => {
+    const k = e.target.closest('[data-form]')?.dataset.form;
+    if (!k) return;
+    onShape(k);                 // modular re-rolls on every click
+    drawShape();
+  });
+
   /* ---------- the tool list: one icon per tool the object has; click opens / closes it ---------- */
 
   const TOOL_ICONS = {
     screen: '<svg viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="11" rx="1.5"/><path d="M9.5 19.5h5M12 16.5v3"/></svg>',
     speaker: '<svg viewBox="0 0 24 24"><path d="M5 9.5h3l4.5-4v13l-4.5-4H5z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
     energy: '<svg viewBox="0 0 24 24"><path d="M13 3.5 6.5 13.5H12l-1 7 6.5-10H12z"/></svg>',
+    shape: '<svg viewBox="0 0 24 24"><path d="M12 4.5l7.6 5.5-2.9 9H7.3l-2.9-9z"/></svg>',
   };
-  const TOOLS = { screen: scr, speaker: spk, energy: eng };
+  const TOOLS = { shape: shp, screen: scr, speaker: spk, energy: eng };
   const toolbox = document.createElement('div');
   toolbox.id = 'toolbox';
   toolbox.innerHTML = '<span class="lbl">log</span>' + Object.keys(TOOLS).map((k) => `<button data-tool="${k}" title="${k}" aria-label="${k}">${TOOL_ICONS[k]}</button>`).join('');
   document.body.appendChild(toolbox);
   // open / closed per tool; screen and speaker open by themselves when they arrive (prompts), energy on demand
-  const open = { screen: true, speaker: true, energy: false };
+  const open = { shape: true, screen: true, speaker: true, energy: false };
   const placed = {};      // tools the user dragged somewhere: { left, top } in px (otherwise they stack on the right)
 
   // drag a tool by its label (or any empty part of its card)
@@ -333,7 +363,7 @@ export function createNodes({ body }) {
   };
   requestAnimationFrame(placeToolsBtn);
   window.addEventListener('resize', placeToolsBtn);
-  const had = { screen: false, speaker: false, energy: false };
+  const had = { shape: false, screen: false, speaker: false, energy: false };
   toolbox.addEventListener('click', (e) => {
     const k = e.target.closest('[data-tool]')?.dataset.tool;
     if (k) open[k] = !open[k];
@@ -349,8 +379,8 @@ export function createNodes({ body }) {
       placedKind = state.kind;
       for (const k in placed) if (placed[k].auto) delete placed[k];
     }
-    const pending = ['screen', 'speaker', 'energy'].filter((k) => !TOOLS[k].classList.contains('hidden') && !placed[k]);
-    for (const k of ['screen', 'speaker', 'energy']) {
+    const pending = ['shape', 'screen', 'speaker', 'energy'].filter((k) => !TOOLS[k].classList.contains('hidden') && !placed[k]);
+    for (const k of ['shape', 'screen', 'speaker', 'energy']) {
       const n = TOOLS[k];
       if (n.classList.contains('hidden') || !placed[k]) continue;
       n.style.left = `${placed[k].left}px`; n.style.right = 'auto'; n.style.top = `${placed[k].top}px`;
@@ -368,10 +398,10 @@ export function createNodes({ body }) {
     const e = currentSpeaker();
     const pw = L.parts.find((q) => q.key === 'battery');
     const sp = screenPart();
-    const target = { screen: sp?.c, speaker: e?.p, energy: pw?.c };
-    const prefer = { screen: 'right', speaker: 'right', energy: 'left' };   // when a part sits in the middle
+    const target = { shape: null, screen: sp?.c, speaker: e?.p, energy: pw?.c };
+    const prefer = { shape: 'left', screen: 'right', speaker: 'right', energy: 'left' };   // when a part sits in the middle
     const vw = window.innerWidth, vh = window.innerHeight;
-    const rightEdge = vw - 20 - (state.kind === 'speaker' ? 50 : 0);       // keep clear of the shape column
+    const rightEdge = vw - 20;
     const list = document.querySelector('.node.bom')?.getBoundingClientRect();
     const gap = Math.max(60, Math.min(140, (x1 - x0) * 0.35));
     // nodes already in place are obstacles
@@ -462,7 +492,8 @@ export function createNodes({ body }) {
 
     // which tools the object has right now
     const e = currentSpeaker();
-    const avail = { screen: state.kind === 'robot' || state.withScreen, speaker: !!e, energy: true };
+    const avail = { shape: state.kind === 'speaker', screen: state.kind === 'robot' || state.withScreen, speaker: !!e, energy: true };
+    if (!shp.classList.contains('hidden')) drawShape();
     toolbox.style.display = toolsOn ? '' : 'none';
     for (const k in avail) {
       if (avail[k] && !had[k] && k !== 'energy') open[k] = true;   // a new part opens its tool
@@ -476,8 +507,6 @@ export function createNodes({ body }) {
     }
     // the open nodes sit around the object, each on the side of its part and near its height
     placeNodes();
-    const shapes = document.getElementById('shapetoggle');
-    if (shapes) shapes.style.top = '64px';
 
     const linkTo = (node, L, on, p) => {
       if (!on) { drawLink(L, false, 0, 0, 0, 0, 'S', dt); return; }
@@ -507,5 +536,6 @@ export function createNodes({ body }) {
       slots.forEach((s) => { s.innerHTML = '+'; delete s.dataset.ref; s.classList.remove('filled'); });
     },
     set onApply(fn) { onApply = fn; },
+    set onShape(fn) { onShape = fn; },
   };
 }
