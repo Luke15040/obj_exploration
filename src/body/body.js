@@ -7,6 +7,7 @@ import { gbufferShader, edgeShader } from './blockshaders.js';
 import { createProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js';
 import { generateBlueNoise } from './bluenoise.js';
 import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js';
+import { holePattern } from '../speaker-patterns.js';
 
 const METHODS = { bayer: 0, blue: 1, split: 2 };
 
@@ -225,6 +226,9 @@ export function createBody(canvas) {
     // real parts inside + the provisional structure tying them together
     const L = layoutParts({
       kind: state.kind,
+      screen: state.screenType,
+      withScreen: state.withScreen,
+      power: state.power,
       shape: state.shape,
       totem: state.totem,
       knobCount: state.extras.filter((e) => e.type === 'knob').length,
@@ -330,8 +334,9 @@ export function createBody(canvas) {
     }
     grow(L.chassis.a, [L.chassis.r, L.chassis.r, L.chassis.r]);
     grow(L.chassis.b, [L.chassis.r, L.chassis.r, L.chassis.r]);
-    if (mx0) grow([geo.sx.value, geo.sy.value, 0], [S.w / 2, S.h / 2 + 18, 20]); // matrix + frog eyes
+    if (mx0 && state.kind === 'robot') grow([geo.sx.value, geo.sy.value, 0], [S.w / 2, S.h / 2 + 18, 20]); // matrix + frog eyes
     for (const e of extras) grow(e.p, [16, 16, 16]);                       // knob caps
+    for (const cb of L.cables) if (cb.kind === 'wall') for (const pt of cb.points) grow(pt, [3, 3, 3]); // the cable to the wall
     const margin = look.pad.value + params.breathe + params.reach + 4;
     const bc = lo.map((v, k) => (v + hi[k]) / 2);
     gl.uniform3fv(u.uBoundC, bc);
@@ -339,7 +344,7 @@ export function createBody(canvas) {
     // window in the skin over the LED matrix's LEDs
     const mx = L.parts.find((p) => p.key === 'matrix');
     if (mx) {
-      gl.uniform3f(u.uWinC, mx.c[0], mx.c[1], mx.c[2]);
+      gl.uniform3f(u.uWinC, mx.c[0], mx.c[1] + S.display.offsetY, mx.c[2]);
       gl.uniform3f(u.uWinH, S.display.w / 2 + 1.5, S.display.h / 2 + 1.5, mx.h[2]);
     } else {
       gl.uniform3f(u.uWinH, 0, 0, 0);
@@ -365,6 +370,19 @@ export function createBody(canvas) {
       gl.uniform4fv(u['uExtraInfo[0]'], extraInfo);
     }
     gl.uniform3f(u.uSpk, X.speaker.r, X.speaker.hole, X.speaker.depth);
+    // speaker grille pattern and LED drawing
+    if (holeKey !== state.speakerPattern) {
+      holeKey = state.speakerPattern;
+      const hp = holePattern(holeKey).slice(0, 32);
+      holeData.fill(0);
+      hp.forEach((h, i) => holeData.set(h, i * 2));
+      holeN = hp.length;
+    }
+    if (u['uSpkHoles[0]']) gl.uniform2fv(u['uSpkHoles[0]'], holeData);
+    gl.uniform1i(u.uSpkHoleN, holeN);
+    ledBits.fill(0);
+    state.leds.forEach((on, i) => { if (on) ledBits[i >> 5] |= 1 << (i & 31); });
+    if (u['uLed[0]']) gl.uniform1uiv(u['uLed[0]'], ledBits);
     gl.uniform3f(u.uKnob, X.knob.r, X.knob.h, X.knob.boss);
   }
 
@@ -529,8 +547,11 @@ export function createBody(canvas) {
   }
 
   // flat view: one colour per kind of part, indexed by LIBRARY[..].type
-  const typeColors = new Float32Array(11 * 3);
-  const pixel3dColors = new Float32Array(11 * 3);
+  const holeData = new Float32Array(64);
+  let holeKey = null, holeN = 0;
+  const ledBits = new Uint32Array(4);
+  const typeColors = new Float32Array(12 * 3);
+  const pixel3dColors = new Float32Array(12 * 3);
   let pixel3dPal = -1;
   function pixel3dPalette() {
     const pals = CONFIG.pixel3d.palettes, i = ((params.palette3d % pals.length) + pals.length) % pals.length;
@@ -540,7 +561,7 @@ export function createBody(canvas) {
     }
     return pals[i];
   }
-  const blobColors = new Float32Array(11 * 3);
+  const blobColors = new Float32Array(12 * 3);
   for (const k in LIBRARY) if (CONFIG.palette.blob.parts[k]) blobColors.set(hexToRgb(CONFIG.palette.blob.parts[k]), LIBRARY[k].type * 3);
   Object.values(LIBRARY).forEach((lib) => {
     const c = CONFIG.palette.flat.parts[Object.keys(LIBRARY).find((k) => LIBRARY[k] === lib)];

@@ -1,6 +1,9 @@
 import { CONFIG } from '../config.js';
 import { state } from '../state.js';
 import { view } from '../view.js';
+import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js';
+import { setSpeakerPattern, setScreenType, setPower } from '../state.js';
+import { SCREENS } from '../config.js';
 import { refImageURL, REF_LABELS } from './refimages.js';
 import { playVoice } from './sound.js';
 
@@ -135,20 +138,30 @@ export function createNodes({ body }) {
   /* ---------- speaker node ---------- */
 
   const spk = document.createElement('div');
-  spk.className = 'node spk hidden';
-  const holes = [[0, 1], [0.5, 6], [1, 12]]
-    .flatMap(([rr, n]) => Array.from({ length: n }, (_, k) => {
-      const a = (k / n) * Math.PI * 2;
-      return `<circle cx="${(30 + 20 * rr * Math.cos(a)).toFixed(1)}" cy="${(30 + 20 * rr * Math.sin(a)).toFixed(1)}" r="3"/>`;
-    })).join('');
+  spk.className = 'node spk tool hidden';
+  const holesSvg = (name) => holePattern(name)
+    .map(([x, y]) => `<circle cx="${(32 + 17 * x).toFixed(1)}" cy="${(24 + 17 * y).toFixed(1)}" r="2.3"/>`).join('');
   spk.innerHTML = `<div class="tab">speaker</div>
     <div class="card">
-      <div class="viz"><svg viewBox="0 0 60 60">${holes}</svg></div>
+      <div class="picker">
+        <button class="arrow" data-step="-1" title="previous pattern">‹</button>
+        <div class="viz"><svg viewBox="0 0 64 48">${holesSvg(state.speakerPattern)}</svg></div>
+        <button class="arrow" data-step="1" title="next pattern">›</button>
+      </div>
       <div class="seg">${['beep', 'chirp', 'hum'].map((v) => `<button data-voice="${v}">${v}</button>`).join('')}</div>
     </div>`;
   document.body.appendChild(spk);
   const spkLink = makeLink('ink');
   const viz = spk.querySelector('.viz');
+  // ‹ › cycle the grille pattern
+  spk.querySelectorAll('.arrow').forEach((b) => b.addEventListener('click', () => {
+    const i = SPEAKER_PATTERNS.indexOf(state.speakerPattern);
+    const next = SPEAKER_PATTERNS[(i + Number(b.dataset.step) + SPEAKER_PATTERNS.length) % SPEAKER_PATTERNS.length];
+    setSpeakerPattern(next);
+    viz.querySelector('svg').innerHTML = holesSvg(next);
+    const e = currentSpeaker();
+    if (e) { const [x, y] = view.project(...e.p); body.ripple(x, y); }
+  }));
   const sound = { voice: 'chirp', volume: 0.6, pitch: 0.5 };
 
   const currentSpeaker = () => state.extras.find((e) => e.type === 'speaker');
@@ -173,6 +186,223 @@ export function createNodes({ body }) {
         body.ripple(x, y);
       }
     });
+  }
+
+  /* ---------- screen node: pick the display from the library ---------- */
+
+  const SCREEN_ORDER = Object.keys(SCREENS);
+  /** The board drawn to scale (1 unit = 1 mm): outline, mounting holes, lit area. */
+  function screenSvg(type) {
+    const sc = SCREENS[type], cx = 32, cy = 24;
+    const x0 = cx - sc.w / 2, y0 = cy - sc.h / 2;
+    const hx = type === 'oled' ? 15.25 : 23.15, hy = type === 'oled' ? 14 : 17;
+    const holes = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sy]) => `<circle class="hole" cx="${cx + sx * hx}" cy="${cy + sy * hy}" r="1.25"/>`).join('');
+    const D = sc.display, dy = cy - D.offsetY;
+    let face = '';
+    if (type === 'matrix') {
+      // the 13 × 9 LEDs, lit ones as drawn on the matrix
+      face = state.leds.map((on, i) => `<rect class="${on ? 'px on' : 'px'}" x="${cx - 19.5 + (i % 13) * 3 + 0.6}" y="${dy - 13.5 + Math.floor(i / 13) * 3 + 0.6}" width="1.8" height="1.8"/>`).join('');
+    } else {
+      const pins = Array.from({ length: 8 }, (_, k) => `<circle class="hole" cx="${cx - 8.9 + k * 2.54}" cy="${cy - 14.6}" r="0.6"/>`).join('');
+      face = pins + `<rect class="px mono" x="${cx - 7.6}" y="${dy - 4.7}" width="3.2" height="4.4"/><rect class="px mono" x="${cx + 4.4}" y="${dy - 4.7}" width="3.2" height="4.4"/>`
+        + `<path class="smile" d="M${cx - 5} ${dy + 1.8} Q${cx} ${dy + 6} ${cx + 5} ${dy + 1.8}"/>`;
+    }
+    return `<rect class="board" x="${x0}" y="${y0}" width="${sc.w}" height="${sc.h}" rx="2"/>${holes}`
+      + `<rect class="glass" x="${cx - D.w / 2 - 1}" y="${dy - D.h / 2 - 1}" width="${D.w + 2}" height="${D.h + 2}" rx="0.8"/>${face}`;
+  }
+  const scr = document.createElement('div');
+  scr.className = 'node scr tool hidden';
+  scr.innerHTML = `<div class="tab">screen</div>
+    <div class="card">
+      <div class="picker">
+        <button class="arrow" data-step="-1" title="previous screen">‹</button>
+        <div class="viz"><svg viewBox="0 0 64 48"></svg></div>
+        <button class="arrow" data-step="1" title="next screen">›</button>
+      </div>
+      <div class="pick-name"></div>
+    </div>`;
+  document.body.appendChild(scr);
+  const scrLink = makeLink('ink');
+  const drawScreenNode = () => {
+    const sc = SCREENS[state.screenType];
+    scr.querySelector('.pick-name').textContent = sc.label;
+    scr.querySelector('svg').innerHTML = screenSvg(state.screenType);
+  };
+  drawScreenNode();
+  scr.querySelectorAll('.arrow').forEach((b) => b.addEventListener('click', () => {
+    const i = SCREEN_ORDER.indexOf(state.screenType);
+    setScreenType(SCREEN_ORDER[(i + Number(b.dataset.step) + SCREEN_ORDER.length) % SCREEN_ORDER.length]);
+    drawScreenNode();
+    const sp = screenPart();
+    if (sp) { const [x, y] = view.project(...sp.c); body.ripple(x, y); }
+  }));
+  const screenPart = () => body.layout()?.parts.find((q) => q.key === 'matrix');
+
+
+
+  /* ---------- energy source node: battery or wall ---------- */
+
+  // drawn like the screen boards (1 unit = 1 mm-ish, hairline): the LiPo pack, or the PD module with its cable out
+  const ENERGY = {
+    battery: { label: 'battery', svg: `<rect class="board" x="14" y="14" width="36" height="20" rx="2.5"/>
+        <path class="board" d="M50 20h3v8h-3"/><path class="bolt" d="M33.5 17.5 27.5 25h5l-2 6.5 6.5-8h-5z"/>` },
+    wall: { label: 'wall-powered', svg: `<rect class="board" x="8" y="18" width="22" height="10" rx="1.5"/>
+        <rect class="glass" x="9.5" y="20.5" width="5" height="5" rx="1"/>
+        <path class="cable" d="M30 23h8c6 0 6 10 12 10h6"/>
+        <path class="board" d="M50 28v10M54 28v10"/><rect class="board" x="47" y="24" width="10" height="5" rx="1"/>` },
+  };
+  const ENERGY_ORDER = ['battery', 'wall'];
+  const eng = document.createElement('div');
+  eng.className = 'node eng tool hidden';
+  eng.innerHTML = `<div class="tab">energy source</div>
+    <div class="card">
+      <div class="picker">
+        <button class="arrow" data-step="-1" title="previous">‹</button>
+        <div class="viz"><svg viewBox="0 0 64 48"></svg></div>
+        <button class="arrow" data-step="1" title="next">›</button>
+      </div>
+      <div class="pick-name"></div>
+    </div>`;
+  document.body.appendChild(eng);
+  const engLink = makeLink('ink');
+  const drawEnergy = () => {
+    eng.querySelector('svg').innerHTML = ENERGY[state.power].svg;
+    eng.querySelector('.pick-name').textContent = ENERGY[state.power].label;
+  };
+  drawEnergy();
+  eng.querySelectorAll('.arrow').forEach((b) => b.addEventListener('click', () => {
+    const i = ENERGY_ORDER.indexOf(state.power);
+    setPower(ENERGY_ORDER[(i + Number(b.dataset.step) + ENERGY_ORDER.length) % ENERGY_ORDER.length]);
+    drawEnergy();
+    const p = body.layout()?.parts.find((q) => q.key === 'battery');
+    if (p) { const [x, y] = view.project(...p.c); body.ripple(x, y); }
+  }));
+
+  /* ---------- the tool list: one icon per tool the object has; click opens / closes it ---------- */
+
+  const TOOL_ICONS = {
+    screen: '<svg viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="11" rx="1.5"/><path d="M9.5 19.5h5M12 16.5v3"/></svg>',
+    speaker: '<svg viewBox="0 0 24 24"><path d="M5 9.5h3l4.5-4v13l-4.5-4H5z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
+    energy: '<svg viewBox="0 0 24 24"><path d="M13 3.5 6.5 13.5H12l-1 7 6.5-10H12z"/></svg>',
+  };
+  const TOOLS = { screen: scr, speaker: spk, energy: eng };
+  const toolbox = document.createElement('div');
+  toolbox.id = 'toolbox';
+  toolbox.innerHTML = '<span class="lbl">log</span>' + Object.keys(TOOLS).map((k) => `<button data-tool="${k}" title="${k}" aria-label="${k}">${TOOL_ICONS[k]}</button>`).join('');
+  document.body.appendChild(toolbox);
+  // open / closed per tool; screen and speaker open by themselves when they arrive (prompts), energy on demand
+  const open = { screen: true, speaker: true, energy: false };
+  const placed = {};      // tools the user dragged somewhere: { left, top } in px (otherwise they stack on the right)
+
+  // drag a tool by its label (or any empty part of its card)
+  for (const [k, node] of Object.entries(TOOLS)) {
+    node.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || e.target.closest('button, .leds, svg')) return;
+      e.preventDefault();
+      const r = node.getBoundingClientRect();
+      const off = [e.clientX - r.left, e.clientY - r.top];
+      node.classList.add('dragging');
+      const move = (ev) => {
+        const left = Math.max(0, Math.min(window.innerWidth - r.width, ev.clientX - off[0]));
+        const top = Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - off[1]));
+        placed[k] = { left, top };
+      };
+      const up = () => {
+        node.classList.remove('dragging');
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    });
+    // double-click the label: back to its place in the stack
+    node.querySelector('.tab').addEventListener('dblclick', () => { delete placed[k]; });
+  }
+
+  // show / hide all the tools at once (pill next to the case switch)
+  let toolsOn = true;
+  const toolsBtn = document.createElement('button');
+  toolsBtn.id = 'tools-toggle';
+  document.body.appendChild(toolsBtn);
+  const markTools = () => { toolsBtn.textContent = toolsOn ? 'tools ●' : 'tools ○'; toolsBtn.classList.toggle('on', toolsOn); };
+  markTools();
+  toolsBtn.addEventListener('click', () => { toolsOn = !toolsOn; markTools(); });
+  const placeToolsBtn = () => {
+    const cs = document.getElementById('casetoggle');
+    if (cs) toolsBtn.style.left = `${Math.round(cs.getBoundingClientRect().right + 12)}px`;
+  };
+  requestAnimationFrame(placeToolsBtn);
+  window.addEventListener('resize', placeToolsBtn);
+  const had = { screen: false, speaker: false, energy: false };
+  toolbox.addEventListener('click', (e) => {
+    const k = e.target.closest('[data-tool]')?.dataset.tool;
+    if (k) open[k] = !open[k];
+  });
+
+  /* ---------- natural placement of the tool nodes ---------- */
+
+  // a node gets a good spot once, when it appears, and then stays put (until the case changes,
+  // or a double-click on its label asks for a new spot)
+  let placedKind = state.kind;
+  function placeNodes() {
+    if (state.kind !== placedKind) {
+      placedKind = state.kind;
+      for (const k in placed) if (placed[k].auto) delete placed[k];
+    }
+    const pending = ['screen', 'speaker', 'energy'].filter((k) => !TOOLS[k].classList.contains('hidden') && !placed[k]);
+    for (const k of ['screen', 'speaker', 'energy']) {
+      const n = TOOLS[k];
+      if (n.classList.contains('hidden') || !placed[k]) continue;
+      n.style.left = `${placed[k].left}px`; n.style.right = 'auto'; n.style.top = `${placed[k].top}px`;
+    }
+    if (!pending.length) return;
+    const L = body.layout();
+    if (!L) return;
+    // the object's footprint on screen
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    const grow = (p) => { const [x, y] = view.project(p[0], p[1], p[2]); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); };
+    for (const p of L.parts) for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) grow([p.c[0] + sx * p.h[0], p.c[1] + sy * p.h[1], p.c[2] + sz * p.h[2]]);
+    if (state.kind === 'robot') for (const w of [state.wheels.left, state.wheels.right]) for (const d of [-45, 45]) { grow([w.x, w.y + d, 0]); grow([w.x + d / 3, w.y, 0]); }
+    if (!isFinite(x0)) return;
+    const cx = (x0 + x1) / 2;
+    const e = currentSpeaker();
+    const pw = L.parts.find((q) => q.key === 'battery');
+    const sp = screenPart();
+    const target = { screen: sp?.c, speaker: e?.p, energy: pw?.c };
+    const prefer = { screen: 'right', speaker: 'right', energy: 'left' };   // when a part sits in the middle
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const rightEdge = vw - 20 - (state.kind === 'speaker' ? 50 : 0);       // keep clear of the shape column
+    const list = document.querySelector('.node.bom')?.getBoundingClientRect();
+    const gap = Math.max(60, Math.min(140, (x1 - x0) * 0.35));
+    // nodes already in place are obstacles
+    const taken = Object.entries(placed).filter(([k]) => !TOOLS[k].classList.contains('hidden'))
+      .map(([k, p]) => ({ x: p.left, y: p.top, w: TOOLS[k].offsetWidth, h: TOOLS[k].offsetHeight }));
+    const items = pending.map((k) => {
+      const t = target[k];
+      const [px, py] = t ? view.project(t[0], t[1], t[2]) : [cx, (y0 + y1) / 2];
+      return { k, py, side: Math.abs(px - cx) < 24 ? prefer[k] : px < cx ? 'left' : 'right', w: TOOLS[k].offsetWidth, h: TOOLS[k].offsetHeight };
+    }).sort((p, q) => p.py - q.py);
+    for (const it of items) {
+      let x = it.side === 'left' ? x0 - gap - it.w : x1 + gap;
+      x = Math.max(20, Math.min(rightEdge - it.w, x));
+      let y = Math.max(56, it.py - it.h / 2 - 40);
+      // never over the components list: go above it, or to its right
+      if (list && x < list.right + 12 && y + it.h > list.top - 12 && y < list.bottom + 12) {
+        if (list.top - it.h - 16 >= 56) y = list.top - it.h - 16;
+        else x = list.right + 16;
+      }
+      // step down past any node already there
+      for (let guard = 0; guard < 8; guard++) {
+        const hit = taken.find((r) => x < r.x + r.w + 12 && x + it.w + 12 > r.x && y < r.y + r.h + 16 && y + it.h + 16 > r.y);
+        if (!hit) break;
+        y = hit.y + hit.h + 16;
+      }
+      y = Math.min(y, vh - it.h - 80);                                      // above the prompts and the log
+      placed[it.k] = { left: Math.round(x), top: Math.round(y), auto: true };
+      taken.push({ x, y, w: it.w, h: it.h });
+      const n = TOOLS[it.k];
+      n.style.left = `${placed[it.k].left}px`; n.style.right = 'auto'; n.style.top = `${placed[it.k].top}px`;
+    }
   }
 
   /* ---------- connectors ---------- */
@@ -230,17 +460,38 @@ export function createNodes({ body }) {
       pulse.style.display = 'none';
     }
 
-    // speaker node follows the speaker's presence; connector to its contact point
+    // which tools the object has right now
     const e = currentSpeaker();
-    if (e && spk.classList.contains('hidden')) { spk.classList.remove('hidden'); syncSound(); }
-    if (!e && !spk.classList.contains('hidden')) spk.classList.add('hidden');
-    if (e) {
-      const sb = spk.getBoundingClientRect();
-      const [x, y] = view.project(...e.p);
-      drawLink(spkLink, true, sb.left, sb.top + 40, x, y, 'S', dt);
-    } else {
-      drawLink(spkLink, false, 0, 0, 0, 0, 'S', dt);
+    const avail = { screen: state.kind === 'robot' || state.withScreen, speaker: !!e, energy: true };
+    toolbox.style.display = toolsOn ? '' : 'none';
+    for (const k in avail) {
+      if (avail[k] && !had[k] && k !== 'energy') open[k] = true;   // a new part opens its tool
+      had[k] = avail[k];
+      const btn = toolbox.querySelector(`[data-tool="${k}"]`);
+      btn.style.display = avail[k] ? '' : 'none';
+      btn.classList.toggle('on', avail[k] && open[k]);
+      const show = toolsOn && avail[k] && open[k];
+      if (show && TOOLS[k].classList.contains('hidden')) { TOOLS[k].classList.remove('hidden'); if (k === 'speaker') syncSound(); if (k === 'energy') drawEnergy(); }
+      if (!show && !TOOLS[k].classList.contains('hidden')) TOOLS[k].classList.add('hidden');
     }
+    // the open nodes sit around the object, each on the side of its part and near its height
+    placeNodes();
+    const shapes = document.getElementById('shapetoggle');
+    if (shapes) shapes.style.top = '64px';
+
+    const linkTo = (node, L, on, p) => {
+      if (!on) { drawLink(L, false, 0, 0, 0, 0, 'S', dt); return; }
+      const nb = node.getBoundingClientRect();
+      const [x, y2] = view.project(...p);
+      // leave from the side that faces the part
+      const fromRight = nb.left + nb.width / 2 < x;
+      drawLink(L, true, fromRight ? nb.right : nb.left, nb.top + 40, x, y2, 'S', dt);
+    };
+    const sp = screenPart();
+    linkTo(scr, scrLink, !scr.classList.contains('hidden') && !!sp, sp ? [sp.c[0] + sp.h[0], sp.c[1], sp.c[2]] : [0, 0, 0]);
+    linkTo(spk, spkLink, !spk.classList.contains('hidden') && !!e, e ? e.p : [0, 0, 0]);
+    const pw = body.layout()?.parts.find((q) => q.key === 'battery');
+    linkTo(eng, engLink, !eng.classList.contains('hidden') && !!pw, pw ? pw.c : [0, 0, 0]);
   }
 
   return {

@@ -68,6 +68,17 @@ export const LIBRARY = {
     // two STEMMA QT ports on opposite edges: in from the bus, out to the next knob
     connectors: { qtIn: { p: [-12.9, 0, -4.45], d: [-1, 0, 0] }, qtOut: { p: [12.9, 0, -4.45], d: [1, 0, 0] } },
   },
+  oled: {
+    name: 'Adafruit Monochrome 1.3" 128×64 OLED (STEMMA QT)', short: 'oled 128×64',
+    url: 'https://www.adafruit.com/product/938',
+    type: 11,
+    // PCB 35.6 × 33 × 6.2 (Adafruit 938); panel 34.5 × 23 × 1.45, active area 29.42 × 14.7; local z = screen facing out
+    size: [35.6, 33.0, 6.2],
+    connectors: {
+      qtIn: { p: [-14, -10, -2.6], d: [0, 0, -1] },
+      qtOut: { p: [14, -10, -2.6], d: [0, 0, -1] },
+    },
+  },
   matrix: {
     name: 'Adafruit IS31FL3741 13×9 RGB LED matrix (STEMMA QT)', short: 'led matrix 13×9',
     url: 'https://www.adafruit.com/product/5201',
@@ -95,8 +106,11 @@ export const LIBRARY = {
     name: 'USB-C PD trigger module (5/9/12/15/20 V DIP switch)', short: 'usb-c pd trigger',
     url: 'https://www.amazon.com/dp/B0FNVBNNP1',
     type: 8,
-    size: [28, 4.5, 11], // not used while a battery powers the object
-    connectors: {},
+    size: [28, 4.5, 11], // wall power: takes the battery's place, set to 12 V
+    connectors: {
+      usb: { p: [-14.2, 0.6, 0], d: [-1, 0, 0] },   // USB-C in, from the wall charger
+      out: { p: [12.5, -0.6, 0], d: [1, 0, 0] },    // output pads
+    },
   },
   battery: {
     name: 'Tattu 850 mAh 3S 11.1 V LiPo (XT30)', short: 'lipo 3s 850 mah',
@@ -115,7 +129,7 @@ export const LIBRARY = {
     url: 'https://www.pololu.com/product/3782',
     type: 10,
     inLibrary: false,
-    why: 'the brain needs 5 V from the 3S battery',
+    why: 'the brain needs 5 V from the 11–12 V supply (battery or PD module)',
     size: [17.8, 8.8, 20.3],
     connectors: {
       vin: { p: [-6.35, -2.0, -10.4], d: [0, 0, -1] },
@@ -132,6 +146,9 @@ export const CABLES = {
   power5: { code: 3, name: '5 V leads', short: '5 v leads', r: 0.9, albedo: 0.3 },
   uart: { code: 4, name: 'UART jumper wires', short: 'uart', r: 0.8, albedo: 0.45 },
   usb: { code: 5, name: 'USB-C ↔ micro USB cable', short: 'usb', r: 1.6, albedo: 0.25 },
+  power12: { code: 2, name: '12 V leads, AWG18 (from the PD module)', short: '12 v leads', r: 1.1, albedo: 0.3 },
+  wall: { code: 5, name: 'USB-C cable to a USB-C PD wall charger (≥ 30 W)', short: 'usb-c to wall', r: 1.8, albedo: 0.25,
+    inLibrary: false, why: 'wall power: the PD module is fed by a USB-C PD charger' },
   speaker: { code: 6, name: 'speaker lead, JST PH 2.0', short: 'speaker lead', r: 0.9, albedo: 0.25 },
   groveQt: {
     code: 7,
@@ -146,7 +163,7 @@ export const CABLES = {
 
 export const MAX_PARTS = 12;
 export const MAX_CABLES = 12;
-export const CABLE_POINTS = 8;
+export const CABLE_POINTS = 14; // points per cable (the cable texture has 16 texels each: 2 for bounds + up to 14)
 const CLEARANCE = 3; // mm kept free between parts
 
 const IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1];
@@ -176,6 +193,35 @@ export function connectorOf(part, name) {
   return { p: p.map((v, k) => v + part.c[k]), d: rot(part.R, c.d) };
 }
 
+/**
+ * A loose cable through a few control points: Catmull-Rom through all of them, then
+ * resampled evenly along its length (so it bends gently, with no kinks or bunching).
+ */
+function looseCable(ctrl) {
+  const P = [ctrl[0], ...ctrl, ctrl[ctrl.length - 1]];
+  const dense = [];
+  for (let i = 1; i < P.length - 2; i++) {
+    const [p0, p1, p2, p3] = [P[i - 1], P[i], P[i + 1], P[i + 2]];
+    for (let s = 0; s < 24; s++) {
+      const t = s / 24, t2 = t * t, t3 = t2 * t;
+      dense.push([0, 1, 2].map((k) => 0.5 * (2 * p1[k] + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3)));
+    }
+  }
+  dense.push(ctrl[ctrl.length - 1]);
+  const acc = [0];
+  for (let i = 1; i < dense.length; i++) acc.push(acc[i - 1] + Math.hypot(...[0, 1, 2].map((k) => dense[i][k] - dense[i - 1][k])));
+  const total = acc[acc.length - 1];
+  const out = [];
+  let j = 0;
+  for (let n = 0; n < CABLE_POINTS; n++) {
+    const want = (total * n) / (CABLE_POINTS - 1);
+    while (j < acc.length - 2 && acc[j + 1] < want) j++;
+    const f = (want - acc[j]) / Math.max(1e-6, acc[j + 1] - acc[j]);
+    out.push([0, 1, 2].map((k) => dense[j][k] + (dense[j + 1][k] - dense[j][k]) * Math.min(1, Math.max(0, f))));
+  }
+  return out;
+}
+
 /** A cable as a smooth curve leaving each connector along its direction (optionally through a via point). */
 function route(a, b, via = null) {
   const bez = (p0, c1, c2, p1, t) => { const u = 1 - t; return [0, 1, 2].map((k) => u * u * u * p0[k] + 3 * u * u * t * c1[k] + 3 * u * t * t * c2[k] + t * t * t * p1[k]); };
@@ -190,7 +236,8 @@ function route(a, b, via = null) {
   const La = Math.min(28, Math.max(6, len3(a.p, via) * 0.45)), Lb = Math.min(28, Math.max(6, len3(via, b.p) * 0.45));
   const h1 = [a.p, a.p.map((v, k) => v + a.d[k] * La), via.map((v, k) => v - vd[k] * La), via];
   const h2 = [via, via.map((v, k) => v + vd[k] * Lb), b.p.map((v, k) => v + b.d[k] * Lb), b.p];
-  return [0, 1 / 3, 2 / 3].map((t) => bez(...h1, t)).concat([via], [1 / 3, 2 / 3, 1].map((t) => bez(...h2, t))).concat([b.p]).slice(0, CABLE_POINTS);
+  const n1 = Math.floor(CABLE_POINTS / 2), n2 = CABLE_POINTS - n1;
+  return Array.from({ length: n1 }, (_, i) => bez(...h1, i / n1)).concat(Array.from({ length: n2 }, (_, i) => bez(...h2, i / (n2 - 1))));
 }
 
 /**
@@ -201,6 +248,9 @@ function route(a, b, via = null) {
  *   extras: [{ type, p, n, scale }] mounted add-ons
  *   wheelHalfW, screenHalfH: from CONFIG
  *   kind: 'robot' (case 1, default) | 'speaker' (case 2: a speaker box, no wheels)
+ *   screen (case 1): which display — 'matrix' (default) or 'oled'
+ *   withScreen (case 2): add a screen above the speaker
+ *   power: 'battery' (default) or 'wall' (USB-C PD module + a cable out to the wall)
  *   shape (case 2): one of SHAPES · knobCount: knobs to make room for (primitives)
  * @returns {{ parts, chassis, neck, cables, offsets }}
  *   offsets[i] = how far add-on i had to slide out along its normal to clear the parts
@@ -283,9 +333,9 @@ function profileY(P) {
  * A random totem: a stack of primitives, each with one job — the electronics at the
  * bottom, then the speaker, then one per knob — every add-on on its shape's front.
  */
-function totemLayout(shapes, content, knobCount, pad) {
+function totemLayout(shapes, content, knobCount, pad, screenSize = null) {
   const wall = pad, overlap = 2;
-  const levels = 2 + knobCount;
+  const levels = 2 + (screenSize ? 1 : 0) + knobCount;
   // only the top level may have a point or a dome; every other one is flat on both sides
   const shapeAt = (i) => {
     const k = shapes[i % shapes.length];
@@ -308,7 +358,9 @@ function totemLayout(shapes, content, knobCount, pad) {
   };
   const sp = LIBRARY.speaker.size;
   stack(shapeAt(1), sp[0], sp[1], 'speaker');
-  for (let i = 0; i < knobCount; i++) stack(shapeAt(2 + i), ENC[0] + 4, ENC[1] + 4, 'knob');
+  if (screenSize) stack(shapeAt(2), screenSize[0] + 4, screenSize[1] + 4, 'screen');   // a level just for the screen
+  const k0 = screenSize ? 3 : 2;
+  for (let i = 0; i < knobCount; i++) stack(shapeAt(k0 + i), ENC[0] + 4, ENC[1] + 4, 'knob');
   // centre the whole stack in height (dy: how much everything moved)
   const dy = TOTEM_MID - (profileY(base)[0] + top) / 2;
   for (const P of prims) P.c = [P.c[0], P.c[1] + dy];
@@ -429,6 +481,9 @@ function computeLayout(s) {
   };
   // case 2: a speaker box — no wheels, no drive; the speaker and the knobs face front
   const box2 = s.kind === 'speaker';
+  // energy source: the LiPo, or (wall-powered) the USB-C PD module in its place
+  const wall = s.power === 'wall';
+  const powerLib = wall ? 'pdTrigger' : 'battery';
   const shape = box2 ? (s.shape ?? 'free') : 'free';
   const prim = box2 && shape !== 'free';
 
@@ -464,12 +519,12 @@ function computeLayout(s) {
       brain = add('brain', 'feather', [mid, brainY + LIBRARY.feather.size[1] / 2, back], { group: 'brain', rank: 3 });
     }
     // battery lies flat behind the drive, low
-    battery = add('battery', 'battery', [mid, yc - 2, back - servo[2] / 2 - CLEARANCE - LIBRARY.battery.size[2] / 2], { rank: 2 });
+    battery = add('battery', powerLib, [mid, yc - 2, back - servo[2] / 2 - CLEARANCE - LIBRARY.battery.size[2] / 2], { rank: 2 });
   } else if (shape === 'totem') {
     // totem: the electronics fill the bottom shape on their own, close behind its front
     back = -(s.pad + LIBRARY.battery.size[2] / 2);
     const bs = LIBRARY.battery.size, pi = LIBRARY.piZero.size, hs = LIBRARY.respeaker.size;
-    battery = add('battery', 'battery', [0, bs[1] / 2, back], { rank: 1 });
+    battery = add('battery', powerLib, [0, bs[1] / 2, back], { rank: 1 });
     buck = add('regulator', 'buck', [bs[0] / 2 + CLEARANCE + LIBRARY.buck.size[0] / 2, LIBRARY.buck.size[1] / 2, back], { rank: 2 });
     const brainY = bs[1] + CLEARANCE;
     brain = add('brain', 'piZero', [0, brainY + pi[1] / 2, back], { group: 'brain', rank: 3 });
@@ -479,7 +534,7 @@ function computeLayout(s) {
     // Everything electronic sits in a layer behind the speaker module, battery at the bottom.
     back = -(s.pad + LIBRARY.speaker.size[2] + CLEARANCE + LIBRARY.battery.size[2] / 2);
     const base = -LIBRARY.speaker.size[1] / 2;
-    battery = add('battery', 'battery', [0, base + LIBRARY.battery.size[1] / 2, back], { rank: 1 });
+    battery = add('battery', powerLib, [0, base + LIBRARY.battery.size[1] / 2, back], { rank: 1 });
     // free skin: the regulator beside the battery; primitive shapes: behind it (keeps the profile compact)
     buck = prim
       ? add('regulator', 'buck', [0, base + LIBRARY.buck.size[1] / 2, back - LIBRARY.battery.size[2] / 2 - CLEARANCE - LIBRARY.buck.size[2] / 2], { rank: 2 })
@@ -489,6 +544,12 @@ function computeLayout(s) {
     brain = add('brain', 'piZero', [0, brainY + pi[1] / 2, back], { group: 'brain', rank: 3 });
     hat = add('hat', 'respeaker', [0, brainY + 1.4 + hs[1] / 2, back], { group: 'brain', rank: 3 });
   }
+  // case 2 can get a screen too ("+ screen"): on the front, just above the speaker (or a totem level of its own)
+  const scrLib = s.screen ?? 'matrix';
+  const scrSize = LIBRARY[scrLib].size;
+  let screenAt = null;
+  if (box2 && s.withScreen) screenAt = [0, LIBRARY.speaker.size[1] / 2 + CLEARANCE + 2 + scrSize[1] / 2, 0];
+
   // case 2 primitive: shape and add-on spots from the electronics as placed (before any relaxing),
   // so the CPU surface and the shader always agree
   let shaped = null;
@@ -498,18 +559,23 @@ function computeLayout(s) {
     const spk = { lo: [-sd[0] / 2, -sd[1] / 2, zc - sd[2] / 2], hi: [sd[0] / 2, sd[1] / 2, zc + sd[2] / 2] };
     if (shape === 'totem') {
       const pool = s.totem?.length ? s.totem : ['box', 'cylinder', 'prism', 'hexagon', 'dome', 'octagon'];
-      const shapes = Array.from({ length: 2 + MAX_PARTS }, (_, i) => pool[i % pool.length]);
-      shaped = totemLayout(shapes, content, s.knobCount ?? knobs.length, s.pad);
+      const shapes = Array.from({ length: 3 + MAX_PARTS }, (_, i) => pool[i % pool.length]);
+      shaped = totemLayout(shapes, content, s.knobCount ?? knobs.length, s.pad, screenAt ? scrSize : null);
       for (const p of [battery, buck, brain, hat]) p.c[1] += shaped.dy;   // the electronics move with their level
+      if (screenAt) screenAt = shaped.spots.find((q) => q.type === 'screen').p.slice();
+      shaped.spots = shaped.spots.filter((q) => q.type !== 'screen');
     } else {
+      // the screen counts as content, so the shape grows around it and the knobs keep clear of it
+      if (screenAt) content.push({ lo: [-scrSize[0] / 2, screenAt[1] - scrSize[1] / 2, -s.pad - scrSize[2]], hi: [scrSize[0] / 2, screenAt[1] + scrSize[1] / 2, scrSize[2] / 2] });
       const one = primLayout(shape, content, spk, s.knobCount ?? knobs.length, s.pad);
       shaped = { prims: [one.prim], spots: one.spots };
     }
   }
 
-  // the screen is the LED matrix; the skin wraps its back and sides, its face stays flush.
-  // The speaker box has no screen.
-  const matrix = box2 ? null : add('matrix', 'matrix', [s.scr[0], s.scr[1], 0], { env: s.pad, fixed: true });
+  // the screen: the skin wraps its back and sides, its face stays flush
+  const matrix = !box2
+    ? add('matrix', scrLib, [s.scr[0], s.scr[1], 0], { env: s.pad, fixed: true })
+    : screenAt ? add('matrix', scrLib, screenAt, { env: s.pad, fixed: true }) : null;
 
   // modules behind surface-mounted add-ons, facing out along the surface normal; their
   // front sits one envelope thickness behind the mount point
@@ -601,14 +667,15 @@ function computeLayout(s) {
     return [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2, Math.min(back, pa[2], pb[2])];
   };
   if (box2) {
-    wire('power', battery, 'xt30', buck, 'vin');
+    wire(wall ? 'power12' : 'power', battery, wall ? 'out' : 'xt30', buck, 'vin');
     wire('power5', buck, 'vout', brain, 'pwr');
     for (const sp of spkParts) wire('speaker', sp, 'lead', hat, 'spk');
+    if (matrix) wire('groveQt', hat, 'grove', matrix, 'qtIn');
   } else {
     wire('servoBus', sL, 'bus', adapter, 'servoA');
     wire('servoBus', sR, 'bus', adapter, 'servoB');
-    wire('power', battery, 'xt30', adapter, 'power');
-    wire('power', adapter, 'power', buck, 'vin'); // shares the adapter's screw terminal
+    wire(wall ? 'power12' : 'power', battery, wall ? 'out' : 'xt30', adapter, 'power');
+    wire(wall ? 'power12' : 'power', adapter, 'power', buck, 'vin'); // shares the adapter's screw terminal
     if (hat) {
       wire('power5', buck, 'vout', brain, 'pwr');
       wire('usb', adapter, 'usb', brain, 'usb');
@@ -619,6 +686,27 @@ function computeLayout(s) {
       wire('uart', adapter, 'uart', brain, 'uart');
       wire('qt', brain, 'qt', matrix, 'qtIn');
     }
+  }
+  // wall power: a USB-C cable leaves the PD module, goes out through the skin and down to the floor, away behind
+  if (wall) {
+    const a = connectorOf(battery, 'usb');
+    const floor = Math.min(...parts.map((p) => box(p).lo[1])) - (box2 ? 8 : 0);
+    const ground = box2 ? floor : Math.min(floor, yc - 45);
+    const zMin = Math.min(...parts.map((p) => box(p).lo[2]));
+    // a loose cable: out of the connector, through the back of the skin, sagging down to the
+    // floor, then lying on it in a wide, lazy curve
+    const r = CABLES.wall.r, x = a.p[0], fy = ground + r;
+    const ctrl = [
+      a.p,
+      a.p.map((v, k) => v + a.d[k] * 6),
+      [x - 4, a.p[1] - 3, zMin - 8],
+      [x - 10, (a.p[1] + fy) / 2, zMin - 24],
+      [x - 22, fy + 1, zMin - 42],
+      [x - 55, fy, zMin - 62],
+      [x - 105, fy, zMin - 70],
+      [x - 160, fy, zMin - 60],
+    ];
+    cables.push({ kind: 'wall', from: 'battery.usb', to: 'wall charger', points: looseCable(ctrl) });
   }
   // I2C daisy chain: matrix → encoder → next encoder (speaker box: from the HAT's grove port)
   let prev = matrix ?? hat, prevPort = matrix ? 'qtOut' : 'grove';

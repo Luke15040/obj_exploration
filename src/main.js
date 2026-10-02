@@ -31,7 +31,7 @@ const labels = createPartLabels(svg, { body });
 const diagram = createDiagram(svg, { body });
 const prompts = createPrompts({ extras, body, nodes });
 nodes.onApply = (id) => prompts.applyReference(id);
-createViewToggle();
+createViewToggle({ orbit });
 
 attachDrag(svg, {
   onStart: (part) => components.setActive(part),

@@ -1,5 +1,5 @@
 import { CONFIG } from './config.js';
-import { state, params, setPose, getPose, setShape, setKind, setShape2, updateExtra } from './state.js';
+import { state, params, setPose, getPose, setShape, setKind, setShape2, updateExtra, setWithScreen } from './state.js';
 import { SHAPES, TOTEM_POOL, TOTEM_BASE, FREE_SLOTS, freeKnobSpots } from './parts.js';
 import { frontPoint, shapeSpots } from './body/sdf.js';
 import { view } from './view.js';
@@ -82,12 +82,11 @@ const ROBOT = [
 
 const SPEAKER_BOX = [
   {
-    id: 'pebble',
-    prompt: 'i want it to feel like a pebble',
-    // the free skin, thick and soft: one rounded mass
+    id: 'face',
+    prompt: 'i want it to have a face',
+    // a screen goes on the front, above the speaker (a level of its own in a totem)
     steps: [
-      { at: 0, form: 'free' },
-      { at: 0, dur: 1100, shape: { padding: 12, blend: 30 } },
+      { at: 0, face: true },
     ],
   },
   {
@@ -113,6 +112,7 @@ const SPEAKER_BOX = [
     reset: true,
     steps: [
       { at: 0, clear: true },
+      { at: 0, face: false },
       { at: 0, form: 'free' },
       { at: 0, dur: 1000, shape: BOX_SHAPE },
       { at: 700, add: 'speaker' },
@@ -237,6 +237,7 @@ export function createPrompts({ extras, body, nodes }) {
     nodes.reset();
     typed.textContent = '';
     state.wheels.linked = true;
+    state.withScreen = false;   // a fresh speaker box starts without a screen
     setKind(kind);
     markCase();
     markForm();
@@ -330,6 +331,10 @@ export function createPrompts({ extras, body, nodes }) {
       }
       if (s.clear) schedule(at, () => extras.clear());
       if (s.form) schedule(at, () => setForm(s.form));
+      if (s.face !== undefined) {
+        schedule(at, () => { setWithScreen(s.face); schedule(60, placeAll); });
+        end = Math.max(end, at + 700);
+      }
     }
     return end;
   }

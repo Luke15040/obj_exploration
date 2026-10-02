@@ -1,11 +1,13 @@
 /**
  * GLSL shared by the dots and block shaders: the speaker as a simple circular
  * pattern of holes sunk into whatever surface it sits on.
- * Layout (must match extras.js): 1 centre hole, 6 on a ring at R/2, 12 at R.
+ * The hole centres come from speaker-patterns.js (uSpkHoles), same as the wireframe in extras.js.
  * Expects MAX_EXTRAS, uExtraCount, uExtraP/N/Info and
  * uSpk = (pattern radius R, hole radius, hole depth) to be declared.
  */
 export const speakerHolesGLSL = /* glsl */ `
+uniform vec2  uSpkHoles[32];   // hole centres, in units of the pattern radius (speaker-patterns.js)
+uniform int   uSpkHoleN;
 // distance to the nearest hole of one ring (n holes, radius R) in the surface plane
 float holeRing(vec2 q, float R, float n, float hr) {
   if (R < 0.01) return length(q) - hr;
@@ -31,7 +33,8 @@ float speakerHoles(vec3 p) {
     float s = info.y;
     float R = uSpk.x * s, hr = uSpk.y * s, depth = uSpk.z;
     if (length(q) > R + hr + 1.0) { d = min(d, length(q) - R - hr); continue; }  // outside the pattern
-    float h2 = min(holeRing(q, 0.0, 1.0, hr), min(holeRing(q, R * 0.5, 6.0, hr), holeRing(q, R, 12.0, hr)));
+    float h2 = 1e9;
+    for (int k = 0; k < uSpkHoleN; k++) h2 = min(h2, length(q - uSpkHoles[k] * R) - hr);
     // from 10 mm above the mount point (the soft skin can bulge a few mm in front of it) down to the hole depth
     d = min(d, max(h2, abs(axial - (10.0 - depth) * 0.5) - (depth + 10.0) * 0.5));
   }

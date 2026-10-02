@@ -281,7 +281,7 @@ body.kind-speaker #shapetoggle { display: flex; }
 #shapetoggle button.on { color: var(--bg-center); background: var(--ink); border-color: var(--ink); }
 #shapetoggle button.dice { margin-top: 8px; border-style: dashed; }
 #shapetoggle button.dice.on { border-style: solid; }
-body.kind-speaker .node.spk { right: 76px; }
+
 #shapetoggle button:not(.on):hover { color: var(--ink-strong); border-color: var(--ink-soft); }
 
 /* horizontal guides while dragging */
@@ -401,9 +401,9 @@ body.split .split-line { display: block; }
 }
 .link { fill: none; stroke-width: 1; }
 .link.pink { stroke: var(--accent); }
-.link.ink { stroke: var(--ink-soft); }
+.link.ink { stroke: var(--ink-soft); stroke-width: 0.6; opacity: 0.35; stroke-dasharray: none; }
 .link-dot.pink { fill: var(--accent); }
-.link-dot.ink { fill: var(--ink-soft); }
+.link-dot.ink { fill: var(--ink-soft); opacity: 0.35; r: 2; }
 .link-pulse { fill: #e2472f; filter: drop-shadow(0 0 4px rgba(226, 71, 47, 0.6)); }
 
 .node {
@@ -508,16 +508,74 @@ body.is-dragging-ref .node.ref .slot:not(.filled) { border-color: var(--ink-soft
 body.is-dragging-ref, body.is-dragging-ref * { cursor: grabbing !important; }
 
 /* speaker node */
-.node.spk { right: 48px; top: 38%; }
-.spk .card { width: 168px; display: flex; flex-direction: column; gap: 10px; }
-.spk .viz {
-  border: 1px dashed var(--hair);
-  border-radius: 2px;
-  height: 70px;
-  display: grid;
-  place-items: center;
+
+/* tool nodes (speaker, screen): title · ‹ drawing › · tags, all in the terminal style */
+.node.tool .card { width: 196px; }
+.node.tool .pick-title { color: var(--ink); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node.tool .picker { display: grid; grid-template-columns: 14px minmax(0, 1fr) 14px; align-items: center; }
+.node.tool .viz { border: 0; background: none; padding: 2px 2px; min-width: 0; }
+/* the speaker tool is a compact one */
+.node.tool.spk .card { width: 132px; }
+.node.tool.spk .viz svg { width: 64px; margin: 0 auto; }
+.node.tool.spk .seg { margin-top: 4px; }
+.node.tool .pick-name { color: var(--ink); text-align: center; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node.tool .viz svg { display: block; width: 100%; height: auto; }
+.node.tool .arrow { font: inherit; font-size: 15px; line-height: 1; color: var(--ink-soft); background: none; border: 0; padding: 0; cursor: pointer; }
+.node.tool .arrow:hover { color: var(--ink-strong); }
+.node.tool .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 0; }
+.node.tool .tags span { border: 1px solid var(--hair); border-radius: 999px; padding: 1px 8px; color: var(--ink-soft); background: var(--surface); }
+.node.tool .seg { margin-top: 8px; }
+.spk .viz svg circle { fill: var(--ink); }
+.scr .board { fill: none; stroke: var(--ink-soft); stroke-width: 0.5; }
+.scr .hole { fill: none; stroke: var(--ink-soft); stroke-width: 0.4; }
+.scr .glass { fill: #1d1d20; }
+.scr .px { fill: #3a3a40; }
+.scr .px.on { fill: #ff5ab4; }
+.scr .px.mono { fill: #f4f4f4; }
+.scr .smile { fill: none; stroke: #f4f4f4; stroke-width: 1.2; stroke-linecap: round; }
+/* show / hide the tools (pill next to the case switch) */
+#tools-toggle {
+  position: fixed; top: 20px; left: 240px; z-index: 3;
+  font: inherit; font-size: 11px; color: var(--ink-soft); text-transform: lowercase;
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px; padding: 5px 12px; cursor: pointer;
 }
-.spk .viz svg { width: 54px; height: 54px; fill: var(--ink-soft); }
+#tools-toggle.on { color: var(--ink); }
+/* tool nodes can be dragged by their label / card */
+.node.tool .tab, .node.tool .card { cursor: grab; }
+.node.tool.dragging, .node.tool.dragging .tab, .node.tool.dragging .card { cursor: grabbing; transition: opacity 320ms ease; }
+.node.tool button, .node.tool svg { cursor: pointer; }
+/* tool list: icons at the right edge, like the shapes */
+#toolbox {
+  position: fixed; left: 20px; bottom: 22px; z-index: 3; font-size: 11px;
+  display: flex; flex-direction: row; align-items: center; gap: 2px;
+  padding: 8px 8px 5px; background: var(--surface); border: 1px solid var(--hair); border-radius: 3px;
+}
+/* 'log' sits on the box's top border, like the other node labels */
+#toolbox .lbl { position: absolute; top: -7px; left: 10px; padding: 0 6px; line-height: 14px; background: var(--bg-mid); color: var(--ink-soft); }
+#toolbox .lbl::after { content: ' ─'; color: var(--hair); }
+#toolbox button {
+  width: 26px; height: 26px; display: grid; place-items: center; padding: 0; cursor: pointer;
+  color: var(--ink-soft); background: none; border: 0;
+  transition: color 160ms ease;
+}
+#toolbox svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+#toolbox button.on { color: var(--ink-strong); }
+#toolbox button:not(.on):hover { color: var(--ink-strong); }
+/* tool nodes stack on the right (their top is set by nodes.js); left of the shape column in case 2 */
+.node.tool { right: 20px; transition: opacity 320ms ease; }
+body.kind-speaker .node.tool { right: 70px; }
+/* screen: compact too */
+.node.tool.scr .card { width: 132px; }
+.node.tool.scr .viz svg { width: 76px; margin: 0 auto; }
+.node.tool.scr .pick-name { margin-top: 2px; font-size: 10px; }
+/* energy source: compact, like the speaker */
+.node.tool.eng .card { width: 104px; padding: 10px 6px 6px; }
+.node.tool.eng .viz svg { width: 46px; margin: 0 auto; }
+.node.tool.eng .pick-name { margin-top: 0; font-size: 10px; }
+/* energy source drawings */
+.eng .board, .eng .cable { fill: none; stroke: var(--ink-soft); stroke-width: 0.8; stroke-linejoin: round; stroke-linecap: round; }
+.eng .glass { fill: #1d1d20; }
+.eng .bolt { fill: var(--ink); }
 .spk .viz.beat svg { animation: beat 260ms ease-out; }
 @keyframes beat { 30% { transform: scale(1.12); fill: #e2472f; } }
 .spk .seg { display: flex; justify-content: space-between; }

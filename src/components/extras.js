@@ -4,6 +4,7 @@ import { view } from '../view.js';
 import { Spring } from '../body/springs.js';
 import { snapRay, resnap, frontPoint, shapeSpots } from '../body/sdf.js';
 import { FREE_SLOTS, freeKnobSpots } from '../parts.js';
+import { holePattern } from '../speaker-patterns.js';
 import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -305,15 +306,10 @@ export function createExtras(svg, { onPulse, offsets = () => [] } = {}) {
       let pts, center;
 
       if (r.type === 'speaker') {
-        // circular hole pattern: 1 centre + 6 at R/2 + 12 at R (matches the shader)
+        // hole pattern (the same list the shader gets)
         const [u, v] = basis(n);
         const R = def.r * s, hr = Math.max(0.05, def.hole * s);
-        const holes = [[0, 1], [R * 0.5, 6], [R, 12]].flatMap(([rr, count]) =>
-          Array.from({ length: count }, (_, k) => {
-            const a = (k / count) * Math.PI * 2;
-            return add(p, add(mul(u, rr * Math.cos(a)), mul(v, rr * Math.sin(a))));
-          }),
-        );
+        const holes = holePattern(state.speakerPattern).map(([x, y]) => add(p, add(mul(u, x * R), mul(v, y * R))));
         const visible = facing(n, p);
         const rings = holes.map((h) => pathOf(circle3(h, n, hr, 12), true)).join(' ');
         r.main.setAttribute('d', visible ? rings : '');

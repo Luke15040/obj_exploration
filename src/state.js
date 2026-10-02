@@ -1,4 +1,4 @@
-import { CONFIG } from './config.js';
+import { CONFIG, SCREENS } from './config.js';
 import { layoutParts, LIBRARY, CABLES, minHalfTrack } from './parts.js';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -12,6 +12,15 @@ export const state = {
   kind: 'robot', // case 1 'robot' (wheels + screen) · case 2 'speaker' (a speaker box)
   shape: 'free', // case 2: 'free' (organic skin), a primitive (see SHAPES in parts.js) or 'totem'
   totem: [],     // case 2 totem: the shape of each level, bottom up (electronics, speaker, knobs)
+  speakerPattern: 'rings', // hole pattern of the speaker grille (see speaker-patterns.js)
+  screenType: 'matrix',    // case 1 display: 'matrix' | 'oled' (CONFIG SCREENS)
+  power: 'battery',        // energy source: 'battery' | 'wall'
+  withScreen: false,       // case 2: a screen was added ('+ screen')
+  // LED matrix 13 × 9: which LEDs are on, row by row from the top (starts as a quiet face)
+  leds: Array.from({ length: 117 }, (_, i) => {
+    const x = i % 13, y = Math.floor(i / 13);
+    return ((y === 2 || y === 3) && (x === 3 || x === 9)) || (y === 6 && (x === 4 || x === 8)) || (y === 7 && x >= 5 && x <= 7);
+  }),
   wheels: {
     linked: true, // symmetric by default
     left:  { x: -CONFIG.initial.wheelHalfTrack, y: CONFIG.initial.wheelY },
@@ -105,6 +114,26 @@ export function setLinked(linked) {
   state.wheels.linked = linked;
   if (linked) moveWheel('left', state.wheels.left.x, state.wheels.left.y);
   else emit();
+}
+
+/** Speaker grille pattern and LED matrix drawing (no layout change, so no emit needed). */
+export function setSpeakerPattern(name) { state.speakerPattern = name; }
+export function setLed(i, on) { state.leds[i] = on; }
+
+/** Case 2: add / remove a screen. */
+export function setWithScreen(on) { state.withScreen = on; emit(); }
+
+/** Energy source: battery or wall power. */
+export function setPower(p) { state.power = p; emit(); }
+
+/** Case 1: swap the display (its size flows everywhere through CONFIG.screen). */
+export function setScreenType(type) {
+  const sc = SCREENS[type];
+  if (!sc) return;
+  state.screenType = type;
+  Object.assign(CONFIG.screen, { w: sc.w, h: sc.h, d: sc.d, r: sc.r, display: { ...sc.display } });
+  clampScreen();
+  emit();
 }
 
 /** Case 2: pick the skin's shape. */
@@ -231,10 +260,14 @@ export function snapshot() {
       normal: e.n.map((v) => Math.round(v * 1000) / 1000),
       angle: Math.round(e.angle),
       ...(e.sound ? { sound: { ...e.sound } } : {}),
+      ...(e.type === 'speaker' ? { pattern: state.speakerPattern } : {}),
     })),
     ...(() => {
       const L = layoutParts({
         kind: state.kind,
+        screen: state.screenType,
+        withScreen: state.withScreen,
+        power: state.power,
         shape: state.shape,
         totem: state.totem,
         knobCount: state.extras.filter((e) => e.type === 'knob').length,
@@ -262,6 +295,9 @@ export function snapshot() {
         provisional: ['skin / enclosure', ...(state.kind === 'speaker' ? [] : ['wheels Ø90×30']), ...(state.extras.some((e) => e.type === 'knob') ? ['knob caps'] : [])],
       };
     })(),
+    power: state.power,
+    ...(state.kind === 'robot' || state.withScreen ? { screenType: state.screenType } : {}),
+    ...(state.kind === 'robot' && state.screenType === 'matrix' ? { screenPixels: Array.from({ length: 9 }, (_, y) => state.leds.slice(y * 13, y * 13 + 13).map((v) => (v ? '#' : '.')).join('')) } : {}),
     body: { ...CONFIG.body, ...state.body },
   };
 }

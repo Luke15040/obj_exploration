@@ -1,20 +1,21 @@
 import { params } from '../state.js';
 
 const MODES = ['dots', 'flat2', 'flat', 'pixel', 'pixel2', 'pixel3d', 'glass', 'empty'];
-const LABELS = { dots: 'dots', blocks: 'lines', flat: 'flat 2', flat2: 'flat 1', pixel: 'pixel 1', pixel2: 'pixel 2', pixel3d: 'pixel 3d', glass: 'glass', empty: 'empty', orbital: 'orbital', blob: 'blob' };
+const LABELS = { dots: 'dots', blocks: 'lines', flat: 'flat 2', flat2: 'flat 1', pixel: 'dither 1', pixel2: 'dither 2', pixel3d: 'pixel 3d', glass: 'glass', empty: 'empty', orbital: 'orbital', blob: 'blob' };
 
 /**
  * "dots | lines | solid" switch (the `b` key cycles). The body layer
  * cross-fades the renderings itself; this only sets the mode and a body class
  * that the SVG styling keys off.
  */
-export function createViewToggle() {
+export function createViewToggle({ orbit } = {}) {
   const root = document.createElement('div');
   root.id = 'viewtoggle';
   root.innerHTML = MODES.map((m) => `<button data-view="${m}">${LABELS[m]}</button>`).join('');
   document.body.appendChild(root);
 
   function set(mode) {
+    if (mode === 'pixel3d' && params.view !== 'pixel3d') orbit?.setView('front');   // pixel 3d reads best straight on
     params.view = mode;
     document.body.classList.toggle('mode-blocks', mode !== 'dots'); // SVG contours hide in the other views
     document.body.classList.toggle('mode-flat', mode === 'flat' || mode === 'flat2');

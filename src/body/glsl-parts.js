@@ -45,6 +45,7 @@ uniform vec3  uNeckB;
 uniform float uNeckR;
 uniform int   uZero;                // always 0: keeps normal loops rolled (much faster to compile)
 uniform int   uHi;                  // highlighted part (hovered in the components list), -1 = none
+uniform uint  uLed[4];              // LED matrix: 117 bits, row by row from the top (the screen node draws them)
 
 // cables: per cable 16 texels in a float texture — [0] bbox min + radius, [1] bbox max + colour code,
 // [2..9] the 8 points of the routed curve
@@ -213,12 +214,28 @@ vec2 encoderModel(vec3 q) {
 // ---- Adafruit IS31FL3741 13×9 RGB LED matrix · local z = facing out ----
 // 51.3 × 39.0 × 4.6. 117 LEDs, 2 × 2 mm at 3 mm pitch. STEMMA QT × 2 on the back.
 float litLED(vec2 cell) {
-  // a quiet face, like the screen card in the main screen: two eyes and a smile
-  if ((cell.y == 2.0 || cell.y == 3.0) && (cell.x == 3.0 || cell.x == 9.0)) return 1.0;
-  if (cell.y == 6.0 && (cell.x == 4.0 || cell.x == 8.0)) return 1.0;
-  if (cell.y == 7.0 && cell.x >= 5.0 && cell.x <= 7.0) return 1.0;
-  return 0.0;
+  // what the screen node drew (starts as a quiet face)
+  int i = int(cell.y) * 13 + int(cell.x);
+  return float((uLed[i >> 5] >> uint(i & 31)) & 1u);
 }
+// ---- Adafruit Monochrome 1.3" 128×64 OLED (938) · local x = width, y = up, z = screen out ----
+// PCB 35.6 × 33 (mounting holes 30.5 × 28, Ø2.5), glass panel 34.5 × 23 × 1.45 set 3 mm low,
+// active area 29.42 × 14.7 with a few lit white pixels, 8 header holes along the top, STEMMA QT × 2 behind.
+vec2 oledModel(vec3 q) {
+  vec2 r = vec2(pcbSlab(q.xzy, vec2(17.8, 16.5), 0.6, 0.8, 1.5, vec2(15.25, 14.0), 1.25), M_PCB_BLACK);
+  vec3 g = q - vec3(0.0, -3.0, 2.1);
+  r = pU(r, vec2(pBox(g, vec3(17.25, 11.5, 0.72)), M_BLACK));                          // glass panel
+  // lit pixels: two eyes and a smile, drawn in the active area
+  vec2 a = g.xy;
+  float eyes = pBox(vec3(abs(a.x) - 6.0, a.y - 2.5, g.z - 0.75), vec3(1.6, 2.2, 0.05));
+  float smile = max(abs(length(a - vec2(0.0, 3.0)) - 7.5) - 0.7, a.y + 1.5);   // lower arc only
+  smile = max(smile, abs(g.z - 0.75) - 0.05);
+  r = pU(r, vec2(min(eyes, smile), M_WHITE));
+  r = pU(r, vec2(pBox(vec3(pinRow(q.x, 8.0), q.y - 14.6, q.z - 1.45), vec3(0.5, 0.5, 0.06)), M_GOLD)); // header holes
+  r = pU(r, vec2(pBox(vec3(abs(q.x) - 14.0, q.y + 10.0, q.z + 1.3), vec3(3.0, 2.1, 1.2)), M_WHITE)); // STEMMA QT × 2
+  return r;
+}
+
 vec2 matrixModel(vec3 q) {
   vec2 r = vec2(pcbSlab(q.xzy, vec2(25.65, 19.5), 0.9, 0.8, 1.5, vec2(23.15, 17.0), 1.25), M_BLACK);
   vec2 cell = clamp(floor((q.xy + vec2(19.5, 13.5)) / 3.0), vec2(0.0), vec2(12.0, 8.0));
@@ -298,6 +315,7 @@ vec2 partModel(int i, vec3 p) {
   if (t == 7) return adapterModel(q);
   if (t == 8) return pdModel(q);
   if (t == 9) return batteryModel(q);
+  if (t == 11) return oledModel(q);
   return buckModel(q);
 }
 
@@ -332,7 +350,7 @@ vec2 cablesSDF(vec3 p) {
     float bb = pBox(p - 0.5 * (lo.xyz + hi.xyz), 0.5 * (hi.xyz - lo.xyz));
     if (bb > 1.0) { if (bb < best.x) best = vec2(bb, hi.w); continue; }
     vec3 a = texelFetch(uCables, ivec2(b + 2, 0), 0).xyz;
-    for (int k = 1; k < 8 + uZero; k++) {
+    for (int k = 1; k < 14 + uZero; k++) {
       vec3 e = texelFetch(uCables, ivec2(b + 2 + k, 0), 0).xyz;
       vec3 pa = p - a, ba = e - a;
       float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-4), 0.0, 1.0);
@@ -342,6 +360,25 @@ vec2 cablesSDF(vec3 p) {
     }
   }
   return best;
+}
+
+/** Cables seen where the ray misses the skin (the cable to the wall runs outside the object). */
+vec4 cablesOnly(vec3 ro, vec3 rd, float t, float tEnd) {
+  if (uCableN == 0) return vec4(0.0);
+  for (int i = 0; i < 64; i++) {
+    vec3 p = ro + rd * t;
+    vec2 cb = cablesSDF(p);
+    if (cb.x < 0.05) {
+      vec2 e = vec2(0.3, 0.0);
+      vec3 n = normalize(vec3(cablesSDF(p + e.xyy).x - cablesSDF(p - e.xyy).x,
+                              cablesSDF(p + e.yxy).x - cablesSDF(p - e.yxy).x,
+                              cablesSDF(p + e.yyx).x - cablesSDF(p - e.yyx).x));
+      return vec4(cableColor(cb.y) * (0.6 + 0.5 * max(dot(n, normalize(uLight)), 0.0)), 1.0);
+    }
+    t += max(cb.x, 0.05);
+    if (t > tEnd) break;
+  }
+  return vec4(0.0);
 }
 
 /** Nearest real part (detailed); idx = its index. */

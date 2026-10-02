@@ -58,7 +58,7 @@ export function createBom({ body }) {
   function update() {
     const layout = body.layout();
     if (!layout) return;
-    const sig = layout.parts.map((p) => p.lib).join(',') + '|' + layout.cables.map((c) => c.kind).join(',') + '|' + state.extras.map((e) => e.type).join(',');
+    const sig = layout.parts.map((p) => p.lib).join(',') + '|' + layout.cables.map((c) => c.kind).join(',') + '|' + state.extras.map((e) => e.type).join(',') + '|' + state.kind + state.shape + state.totem.join('') + state.power;
     if (sig === signature) return;
     signature = sig;
     render(layout);
