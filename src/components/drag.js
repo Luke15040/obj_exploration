@@ -1,5 +1,5 @@
-import { state, moveWheel, moveScreen } from '../state.js?v=202610021644';
-import { view } from '../view.js?v=202610021644';
+import { state, moveWheel, moveScreen } from '../state.js?v=202610021927';
+import { view } from '../view.js?v=202610021927';
 
 /** Current centre (mm) of a part by its data-part name. */
 function partPos(part) {

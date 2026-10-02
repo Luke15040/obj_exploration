@@ -132,6 +132,22 @@ export const LIBRARY = {
       balance: { p: [-31, 5, 7], d: [-1, 0, 0] }, // for charging only
     },
   },
+  qtHub: {
+    name: 'Adafruit Qwiic / STEMMA QT 5 port hub', short: 'stemma qt hub',
+    url: 'https://www.adafruit.com/product/5625',
+    type: 12,
+    inLibrary: false,
+    why: 'the brain has one I2C port: the hub lets the screen and every knob run their own cable from it',
+    // Adafruit 5625: 25.4 × 17.8 × 6.0 (PCB 1.6 + five vertical JST SH sockets in a row)
+    size: [25.4, 6.0, 17.8],
+    connectors: {
+      p0: { p: [-10, 3.0, 0], d: [0, 1, 0] },   // in, from the brain
+      p1: { p: [-5, 3.0, 0], d: [0, 1, 0] },
+      p2: { p: [0, 3.0, 0], d: [0, 1, 0] },
+      p3: { p: [5, 3.0, 0], d: [0, 1, 0] },
+      p4: { p: [10, 3.0, 0], d: [0, 1, 0] },
+    },
+  },
   buck: {
     name: 'Pololu 5 V 3.2 A step-down regulator D36V28F5', short: '5 v regulator',
     url: 'https://www.pololu.com/product/3782',
@@ -556,6 +572,13 @@ function computeLayout(s) {
     brain = add('brain', 'piZero', [0, brainY + pi[1] / 2, back], { group: 'brain', rank: 3 });
     hat = add('hat', 'respeaker', [0, brainY + 1.4 + hs[1] / 2, back], { group: 'brain', rank: 3 });
   }
+  // I2C: the brain has a single port (the Feather's STEMMA QT, or the HAT's Grove). With the screen
+  // and knobs together, a passive 5-port hub sits beside the brain and each device gets its own cable
+  const i2cCount = (!box2 || s.withScreen ? 1 : 0) + knobs.length;
+  const hubLib = LIBRARY.qtHub.size;
+  const hub = i2cCount > 1
+    ? add('qt-hub', 'qtHub', [brain.c[0], (hat ?? brain).c[1] + (hat ?? brain).h[1] + CLEARANCE + hubLib[1] / 2, brain.c[2]], { rank: 4 })   // lying on top of the brain stack
+    : null;
   // case 2 can get a screen too ("+ screen"): on the front, just above the speaker (or a totem level of its own)
   const scrLib = s.screen ?? 'matrix';
   const scrSize = LIBRARY[scrLib].size;
@@ -566,14 +589,14 @@ function computeLayout(s) {
   // so the CPU surface and the shader always agree
   let shaped = null;
   if (prim) {
-    const content = [battery, buck, brain, hat].map((p) => ({ lo: p.c.map((v, k) => v - p.h[k]), hi: p.c.map((v, k) => v + p.h[k]) }));
+    const content = [battery, buck, brain, hat, hub].filter(Boolean).map((p) => ({ lo: p.c.map((v, k) => v - p.h[k]), hi: p.c.map((v, k) => v + p.h[k]) }));
     const sd = SPK, zc = -(sd[2] / 2 + s.pad);
     const spk = { lo: [-sd[0] / 2, -sd[1] / 2, zc - sd[2] / 2], hi: [sd[0] / 2, sd[1] / 2, zc + sd[2] / 2] };
     if (shape === 'totem') {
       const pool = s.totem?.length ? s.totem : ['box', 'cylinder', 'prism', 'hexagon', 'dome', 'octagon'];
       const shapes = Array.from({ length: 3 + MAX_PARTS }, (_, i) => pool[i % pool.length]);
       shaped = totemLayout(shapes, content, s.knobCount ?? knobs.length, s.pad, screenAt ? scrSize : null, SPK);
-      for (const p of [battery, buck, brain, hat]) p.c[1] += shaped.dy;   // the electronics move with their level
+      for (const p of [battery, buck, brain, hat, hub].filter(Boolean)) p.c[1] += shaped.dy;   // the electronics move with their level
       if (screenAt) screenAt = shaped.spots.find((q) => q.type === 'screen').p.slice();
       shaped.spots = shaped.spots.filter((q) => q.type !== 'screen');
     } else {
@@ -682,7 +705,6 @@ function computeLayout(s) {
     wire(wall ? 'power12' : 'power', battery, wall ? 'out' : 'xt30', buck, 'vin');
     wire('power5', buck, 'vout', brain, 'pwr');
     for (const sp of spkParts) wire('speaker', sp, 'lead', hat, 'spk');
-    if (matrix) wire('groveQt', hat, 'grove', matrix, 'qtIn');
   } else {
     wire('servoBus', sL, 'bus', adapter, 'servoA');
     wire('servoBus', sR, 'bus', adapter, 'servoB');
@@ -691,12 +713,10 @@ function computeLayout(s) {
     if (hat) {
       wire('power5', buck, 'vout', brain, 'pwr');
       wire('usb', adapter, 'usb', brain, 'usb');
-      wire('groveQt', hat, 'grove', matrix, 'qtIn');
       for (const sp of spkParts) wire('speaker', sp, 'lead', hat, 'spk');
     } else {
       wire('power5', buck, 'vout', brain, 'vbus');
       wire('uart', adapter, 'uart', brain, 'uart');
-      wire('qt', brain, 'qt', matrix, 'qtIn');
     }
   }
   // wall power: a USB-C cable leaves the PD module, goes out through the skin and down to the floor, away behind
@@ -720,9 +740,16 @@ function computeLayout(s) {
     ];
     cables.push({ kind: 'wall', from: 'battery.usb', to: 'wall charger', points: looseCable(ctrl) });
   }
-  // I2C daisy chain: matrix → encoder → next encoder (speaker box: from the HAT's grove port)
-  let prev = matrix ?? hat, prevPort = matrix ? 'qtOut' : 'grove';
-  for (const enc of encParts) { wire(prev === hat ? 'groveQt' : 'qt', prev, prevPort, enc, 'qtIn', prev.lib === 'encoder' ? behind(prev, enc) : null); prev = enc; prevPort = 'qtOut'; }
+  // I2C: every device starts from the brain — straight from its port when it is the only one,
+  // otherwise through the hub beside it (one cable per device; past four ports they chain on)
+  const i2c = [matrix, ...encParts].filter(Boolean);
+  const [src, srcPort, srcKind] = hat ? [hat, 'grove', 'groveQt'] : [brain, 'qt', 'qt'];
+  if (hub) {
+    wire(srcKind, src, srcPort, hub, 'p0');
+    i2c.forEach((d, i) => (i < 4 ? wire('qt', hub, `p${i + 1}`, d, 'qtIn') : wire('qt', i2c[i - 1], 'qtOut', d, 'qtIn', behind(i2c[i - 1], d))));
+  } else if (i2c.length) {
+    wire(srcKind, src, srcPort, i2c[0], 'qtIn');
+  }
 
   if (box2) {
     // provisional structure: a front baffle where the speaker and the knob mount (so the
@@ -733,7 +760,7 @@ function computeLayout(s) {
   }
 
   // provisional structure: a frame bar between the servos, and a neck up to the matrix
-  const top = Math.max(...[adapter, buck, brain, hat].filter(Boolean).map((p) => box(p).hi[1]));
+  const top = Math.max(...[adapter, buck, brain, hat, hub].filter(Boolean).map((p) => box(p).hi[1]));
   const chassis = { a: [sL.c[0], sL.c[1], back], b: [sR.c[0], sR.c[1], back], r: 7 };
   const base = s.scr[1] - s.screenHalfH;
   const gapUp = base - (top + s.pad);

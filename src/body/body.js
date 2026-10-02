@@ -1,13 +1,13 @@
-import { CONFIG } from '../config.js?v=202610021644';
-import { state, params } from '../state.js?v=202610021644';
-import { view } from '../view.js?v=202610021644';
-import { Spring } from './springs.js?v=202610021644';
-import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader } from './shaders.js?v=202610021644';
-import { gbufferShader, edgeShader } from './blockshaders.js?v=202610021644';
-import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610021644';
-import { generateBlueNoise } from './bluenoise.js?v=202610021644';
-import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610021644';
-import { holePattern } from '../speaker-patterns.js?v=202610021644';
+import { CONFIG } from '../config.js?v=202610021927';
+import { state, params } from '../state.js?v=202610021927';
+import { view } from '../view.js?v=202610021927';
+import { Spring } from './springs.js?v=202610021927';
+import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader } from './shaders.js?v=202610021927';
+import { gbufferShader, edgeShader } from './blockshaders.js?v=202610021927';
+import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610021927';
+import { generateBlueNoise } from './bluenoise.js?v=202610021927';
+import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610021927';
+import { holePattern } from '../speaker-patterns.js?v=202610021927';
 
 const METHODS = { bayer: 0, blue: 1, split: 2 };
 
@@ -573,8 +573,8 @@ export function createBody(canvas) {
   const holeData = new Float32Array(64);
   let holeKey = null, holeN = 0;
   const ledBits = new Uint32Array(4);
-  const typeColors = new Float32Array(12 * 3);
-  const pixel3dColors = new Float32Array(12 * 3);
+  const typeColors = new Float32Array(13 * 3);
+  const pixel3dColors = new Float32Array(13 * 3);
   let pixel3dPal = -1;
   function pixel3dPalette() {
     const pals = CONFIG.pixel3d.palettes, i = ((params.palette3d % pals.length) + pals.length) % pals.length;
@@ -584,7 +584,7 @@ export function createBody(canvas) {
     }
     return pals[i];
   }
-  const blobColors = new Float32Array(12 * 3);
+  const blobColors = new Float32Array(13 * 3);
   for (const k in LIBRARY) if (CONFIG.palette.blob.parts[k]) blobColors.set(hexToRgb(CONFIG.palette.blob.parts[k]), LIBRARY[k].type * 3);
   Object.values(LIBRARY).forEach((lib) => {
     const c = CONFIG.palette.flat.parts[Object.keys(LIBRARY).find((k) => LIBRARY[k] === lib)];

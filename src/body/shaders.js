@@ -1,5 +1,5 @@
-import { speakerHolesGLSL } from './glsl-speaker.js?v=202610021644';
-import { partsGLSL } from './glsl-parts.js?v=202610021644';
+import { speakerHolesGLSL } from './glsl-speaker.js?v=202610021927';
+import { partsGLSL } from './glsl-parts.js?v=202610021927';
 
 /**
  * Body shaders (GLSL ES 3.00 / WebGL2).
@@ -660,7 +660,7 @@ uniform vec3  uFRed;
 uniform vec3  uFBlue;
 uniform vec3  uFGreen;
 uniform vec3  uFOrange;
-uniform vec3  uTypeColor[12];   // one colour per kind of part (flat view)
+uniform vec3  uTypeColor[13];   // one colour per kind of part (flat view)
 uniform float uSketch;          // 1 = hand-drawn grain and wobble ("flat"), 0 = clean ("flat 2")
 
 float grain(vec2 px) { return hash(floor(px)); }
@@ -830,7 +830,7 @@ uniform vec2  uGridOff;
 uniform float uLineW;      // contour half-width, device px
 uniform int   uHi;
 uniform int   uPartType[12];
-uniform vec3  uTypeColor[12];
+uniform vec3  uTypeColor[13];
 uniform vec3  uPRed;
 uniform vec3  uPPink;
 uniform vec3  uPLight;
@@ -1000,7 +1000,7 @@ uniform sampler2D uG;
 uniform float uAlpha;
 uniform float uLineW;          // line half-width, device px
 uniform int   uPartType[12];
-uniform vec3  uTypeColor[12];
+uniform vec3  uTypeColor[13];
 uniform int   uHi;
 uniform vec3  uFInk;
 uniform vec3  uFRed;
@@ -1193,7 +1193,7 @@ export const blobShader = levelCommon + /* glsl */ `
 uniform float uAlpha;
 uniform float uMerge;          // smooth-union radius, mm
 uniform float uSwell;          // mm added around each part
-uniform vec3  uBlobColor[12];  // per part type
+uniform vec3  uBlobColor[13];  // per part type
 uniform vec3  uBlobWheel;
 uniform vec3  uBlobKnob;
 
@@ -1316,7 +1316,7 @@ uniform vec3  uPRed;
 uniform vec3  uPPink;
 uniform vec3  uPLight;
 uniform vec3  uPBlue;
-uniform vec3  uTypeColor[12];
+uniform vec3  uTypeColor[13];
 
 void main() {
   vec2 cell = floor((gl_FragCoord.xy - uGridOff) / uCellPx);
@@ -1520,7 +1520,7 @@ uniform float uCellPx;
 uniform vec2  uGridOff;
 uniform vec3  uSkinCol;
 uniform vec3  uWheelCol;
-uniform vec3  uTypeColor[12];
+uniform vec3  uTypeColor[13];
 uniform float uMono;      // 1 = the grey version: tone-on-tone shape with a dot pattern
 uniform float uMonoParts; // 1 = the parts in greys too (look a); 0 = parts keep their colours (look b)
 uniform vec3  uDotCol;
@@ -1607,7 +1607,7 @@ void main() {
  */
 export const glassShader = levelCommon + /* glsl */ `
 uniform float uAlpha;
-uniform vec3  uTypeColor[12];
+uniform vec3  uTypeColor[13];
 uniform float uFrost;     // how much the glass scatters the rays (radians)
 
 vec3 iridescence(float x) {

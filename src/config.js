@@ -99,15 +99,15 @@ export const CONFIG = {
     // a new one is picked at every "start over": [skin (robot), skin (speaker), wheels, parts by kind]
     palettes: [
       { skin: '#1fa34a', skinSpeaker: '#13a092', wheel: '#0d7f73',
-        parts: { servo: '#ff4fa3', feather: '#ffd21f', piZero: '#ff8a1f', respeaker: '#b46bff', speaker: '#3fb8ff', encoder: '#ff5a3c', matrix: '#f5f5f5', oled: '#e8f4ff', servoAdapter: '#7a5cff', pdTrigger: '#c0c0c0', battery: '#ff3b3b', buck: '#ffe14d' } },
+        parts: { servo: '#ff4fa3', feather: '#ffd21f', piZero: '#ff8a1f', respeaker: '#b46bff', speaker: '#3fb8ff', encoder: '#ff5a3c', matrix: '#f5f5f5', oled: '#e8f4ff', servoAdapter: '#7a5cff', pdTrigger: '#c0c0c0', battery: '#ff3b3b', buck: '#ffe14d', qtHub: '#2b2b2e' } },
       { skin: '#7cc243', skinSpeaker: '#5bb53a', wheel: '#3e8a2c',   // daisy
-        parts: { servo: '#ffffff', feather: '#ffcf1f', piZero: '#ffb21f', respeaker: '#ff8fc8', speaker: '#fff3a8', encoder: '#ffd84a', matrix: '#ffffff', oled: '#fff6c8', servoAdapter: '#ff9ad1', pdTrigger: '#dddddd', battery: '#ff7ab8', buck: '#ffe680' } },
+        parts: { servo: '#ffffff', feather: '#ffcf1f', piZero: '#ffb21f', respeaker: '#ff8fc8', speaker: '#fff3a8', encoder: '#ffd84a', matrix: '#ffffff', oled: '#fff6c8', servoAdapter: '#ff9ad1', pdTrigger: '#dddddd', battery: '#ff7ab8', buck: '#ffe680', qtHub: '#2b2b2e' } },
       { skin: '#0f9a86', skinSpeaker: '#13887a', wheel: '#0a6b5e',   // orchid
-        parts: { servo: '#c13bd6', feather: '#ffe11a', piZero: '#e05be8', respeaker: '#8f2fd1', speaker: '#f07ce8', encoder: '#ffe11a', matrix: '#f6e6ff', oled: '#fff9a8', servoAdapter: '#a24bff', pdTrigger: '#cccccc', battery: '#ff4fd8', buck: '#fff06a' } },
+        parts: { servo: '#c13bd6', feather: '#ffe11a', piZero: '#e05be8', respeaker: '#8f2fd1', speaker: '#f07ce8', encoder: '#ffe11a', matrix: '#f6e6ff', oled: '#fff9a8', servoAdapter: '#a24bff', pdTrigger: '#cccccc', battery: '#ff4fd8', buck: '#fff06a', qtHub: '#2b2b2e' } },
       { skin: '#18a24b', skinSpeaker: '#1b9a5a', wheel: '#0e6e35',   // tulip
-        parts: { servo: '#e8262b', feather: '#ff8a1a', piZero: '#ff5a1f', respeaker: '#d91c3c', speaker: '#ff3d2e', encoder: '#ff9a1a', matrix: '#fff1e8', oled: '#ffe0c0', servoAdapter: '#c0182b', pdTrigger: '#cccccc', battery: '#ff6a3d', buck: '#ffb02e' } },
+        parts: { servo: '#e8262b', feather: '#ff8a1a', piZero: '#ff5a1f', respeaker: '#d91c3c', speaker: '#ff3d2e', encoder: '#ff9a1a', matrix: '#fff1e8', oled: '#ffe0c0', servoAdapter: '#c0182b', pdTrigger: '#cccccc', battery: '#ff6a3d', buck: '#ffb02e', qtHub: '#2b2b2e' } },
       { skin: '#3a5cf0', skinSpeaker: '#2f6cf2', wheel: '#2238a8',   // night garden
-        parts: { servo: '#ffd21f', feather: '#ff6fb5', piZero: '#ff9a2e', respeaker: '#ffe14d', speaker: '#ff7ac0', encoder: '#5ef0c8', matrix: '#ffffff', oled: '#c8fff0', servoAdapter: '#ffb84d', pdTrigger: '#cccccc', battery: '#ff4f6d', buck: '#a8f05e' } },
+        parts: { servo: '#ffd21f', feather: '#ff6fb5', piZero: '#ff9a2e', respeaker: '#ffe14d', speaker: '#ff7ac0', encoder: '#5ef0c8', matrix: '#ffffff', oled: '#c8fff0', servoAdapter: '#ffb84d', pdTrigger: '#cccccc', battery: '#ff4f6d', buck: '#a8f05e', qtHub: '#2b2b2e' } },
     ],
   },
   // "orbital" view: the shape as a soft density cloud
@@ -141,7 +141,7 @@ export const CONFIG = {
       parts: {
         servo: '#1fb5c4', feather: '#ff6a1a', piZero: '#ff8a2a', respeaker: '#ff5a36',
         speaker: '#36d6c3', encoder: '#9fe8d8', matrix: '#5fe6dc', oled: '#9ff0ea', servoAdapter: '#ffa040',
-        pdTrigger: '#c0c0c0', battery: '#ff3d1f', buck: '#ffb347',
+        pdTrigger: '#c0c0c0', battery: '#ff3d1f', buck: '#ffb347', qtHub: '#d0d0d0',
       },
       wheel: '#ff7424',
       knob: '#c8fff4',
@@ -176,6 +176,7 @@ export const CONFIG = {
         pdTrigger: '#9e9e9e',
         battery: '#8bbf3c',
         buck: '#c9a227',
+        qtHub: '#4a4a4f',
       },
     },
   },

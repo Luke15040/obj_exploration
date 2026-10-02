@@ -1,8 +1,8 @@
-import { CONFIG } from './config.js?v=202610021644';
-import { state, params, setPose, getPose, setShape, setKind, setShape2, updateExtra, setWithScreen } from './state.js?v=202610021644';
-import { SHAPES, TOTEM_POOL, TOTEM_BASE, FREE_SLOTS, freeKnobSpots } from './parts.js?v=202610021644';
-import { frontPoint, shapeSpots } from './body/sdf.js?v=202610021644';
-import { view } from './view.js?v=202610021644';
+import { CONFIG } from './config.js?v=202610021927';
+import { state, params, setPose, getPose, setShape, setKind, setShape2, updateExtra, setWithScreen } from './state.js?v=202610021927';
+import { SHAPES, TOTEM_POOL, TOTEM_BASE, FREE_SLOTS, freeKnobSpots } from './parts.js?v=202610021927';
+import { frontPoint, shapeSpots } from './body/sdf.js?v=202610021927';
+import { view } from './view.js?v=202610021927';
 
 /**
  * Guided prompts: a few canned "prompts" that reshape the object, standing in

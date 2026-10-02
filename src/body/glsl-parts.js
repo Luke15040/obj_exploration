@@ -298,6 +298,17 @@ vec2 batteryModel(vec3 q) {
   return r;
 }
 
+// ---- Adafruit STEMMA QT 5 port hub (25.4 × 17.8 × 6.0) · local x = length, y = up, z = width ----
+vec2 hubModel(vec3 q) {
+  float pcbY = -3.0 + 0.8;
+  float top = pcbY + 0.8;
+  vec2 r = vec2(pcbSlab(q, vec2(12.7, 8.9), pcbY, 0.8, 1.2, vec2(10.7, 6.9), 1.1), M_PCB_BLACK);
+  float sx = q.x - 5.0 * clamp(floor(q.x / 5.0 + 0.5), -2.0, 2.0);                // five sockets, 5 mm pitch
+  r = pU(r, vec2(pBox(vec3(sx, q.y - (top + 2.2), q.z), vec3(2.1, 2.2, 3.0)), M_WHITE));
+  r = pU(r, vec2(pBox(vec3(q.x, q.y - (top + 0.3), q.z + 6.9), vec3(3.0, 0.3, 0.6)), M_GOLD)); // breakout pads
+  return r;
+}
+
 // ---- Pololu D36V28F5 5 V step-down (17.8 × 20.3 × 8.8) · local x = width, y = up, z = length ----
 vec2 buckModel(vec3 q) {
   float pcbY = -4.4 + 0.8;
@@ -329,6 +340,7 @@ vec2 partModel(int i, vec3 p) {
   if (t == 8) return pdModel(q);
   if (t == 9) return batteryModel(q);
   if (t == 11) return oledModel(q);
+  if (t == 12) return hubModel(q);
   return buckModel(q);
 }
 
