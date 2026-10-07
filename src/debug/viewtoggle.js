@@ -1,4 +1,4 @@
-import { params } from '../state.js?v=202610071420';
+import { params } from '../state.js?v=202610071423';
 
 // three pages: the main one, lab.html with every particle / dither experiment, cross.html with only the cross view
 const LAB = document.body.dataset.page === 'lab';
@@ -105,7 +105,7 @@ export function createViewToggle({ orbit } = {}) {
   pstyle.id = 'partstyle';
   // from the most real to the most abstract
   // (line, flat 1, boxes, grid line, dots and crosses are still in the shaders, just not offered)
-  const PSTYLES = { colour: 'colour', grey: 'grey', flat: 'flat', vector: 'vector', outline: 'outline', flathd2: 'tiles' };
+  const PSTYLES = { colour: 'real', grey: 'grey', flat: 'flat', vector: 'colour', outline: 'outline', flathd2: 'tiles' };   // (labels only: the ids stay)
   if (!PSTYLES[params.partStyle]) params.partStyle = 'colour';
   pstyle.innerHTML = '<span class="lbl">parts</span>' + Object.entries(PSTYLES).map(([k, t]) => `<button data-pstyle="${k}">${t}</button>`).join('');
   const markP = () => {

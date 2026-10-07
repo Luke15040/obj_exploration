@@ -1,12 +1,12 @@
-import { CONFIG } from '../config.js?v=202610071420';
-import { state, params, onChange, addExtra, updateExtra, removeExtra, mountNormal } from '../state.js?v=202610071420';
-import { view } from '../view.js?v=202610071420';
-import { Spring } from '../body/springs.js?v=202610071420';
-import { snapRay, resnap, frontPoint, shapeSpots, faceAnchors } from '../body/sdf.js?v=202610071420';
-import { FREE_SLOTS, freeKnobSpots } from '../parts.js?v=202610071420';
-import { holePattern } from '../speaker-patterns.js?v=202610071420';
-import { drawMarkers } from './markers.js?v=202610071420';
-import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js?v=202610071420';
+import { CONFIG } from '../config.js?v=202610071423';
+import { state, params, onChange, addExtra, updateExtra, removeExtra, mountNormal } from '../state.js?v=202610071423';
+import { view } from '../view.js?v=202610071423';
+import { Spring } from '../body/springs.js?v=202610071423';
+import { snapRay, resnap, frontPoint, shapeSpots, faceAnchors } from '../body/sdf.js?v=202610071423';
+import { FREE_SLOTS, freeKnobSpots } from '../parts.js?v=202610071423';
+import { holePattern } from '../speaker-patterns.js?v=202610071423';
+import { drawMarkers } from './markers.js?v=202610071423';
+import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js?v=202610071423';
 
 const NS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs = {}, parent) => {

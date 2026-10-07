@@ -1,7 +1,7 @@
-import { CONFIG } from './config.js?v=202610071420';
-import { view } from './view.js?v=202610071420';
-import { Spring } from './body/springs.js?v=202610071420';
-import { params } from './state.js?v=202610071420';
+import { CONFIG } from './config.js?v=202610071423';
+import { view } from './view.js?v=202610071423';
+import { Spring } from './body/springs.js?v=202610071423';
+import { params } from './state.js?v=202610071423';
 
 const DEG = Math.PI / 180;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
