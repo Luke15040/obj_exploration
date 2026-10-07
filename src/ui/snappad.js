@@ -1,4 +1,4 @@
-import { params } from '../state.js?v=202610071438';
+import { params } from '../state.js?v=202610071442';
 
 // the options, as in the sketch: a vertical axis with the step fanned out at its foot
 const SNAPS = [

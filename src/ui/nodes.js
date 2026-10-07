@@ -1,11 +1,11 @@
-import { CONFIG } from '../config.js?v=202610071438';
-import { state, params } from '../state.js?v=202610071438';
-import { view } from '../view.js?v=202610071438';
-import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js?v=202610071438';
-import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js?v=202610071438';
-import { SCREENS } from '../config.js?v=202610071438';
-import { refImageURL, REF_LABELS } from './refimages.js?v=202610071438';
-import { playVoice } from './sound.js?v=202610071438';
+import { CONFIG } from '../config.js?v=202610071442';
+import { state, params } from '../state.js?v=202610071442';
+import { view } from '../view.js?v=202610071442';
+import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js?v=202610071442';
+import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js?v=202610071442';
+import { SCREENS } from '../config.js?v=202610071442';
+import { refImageURL, REF_LABELS } from './refimages.js?v=202610071442';
+import { playVoice } from './sound.js?v=202610071442';
 
 const NS = 'http://www.w3.org/2000/svg';
 const easeOut = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
@@ -397,12 +397,12 @@ export function createNodes({ body }) {
   }
   for (const [k, node] of Object.entries(TOOLS)) setupTool(k, node);
 
-  // hover a node — or click it to keep it — and its part lights up in its 'colour' style colour,
-  // the node's frame too, so you see which is which
+  // hover a node and its part lights up in the node's colour, the node's frame too, so you see
+  // which is which (hover only: a click — also the one that starts a drag — must not leave it on)
   const PART_OF = { screen: 'matrix', speaker: 'speaker-0', energy: 'battery' };
   // the nodes' own palette (yellow · orange · cyan · olive)
   const NODE_COLOUR = { screen: '#ff8c55', speaker: '#e7e96c', energy: '#a0e0e0', wheels: '#8b8f63' };
-  let pinned = null;
+  let lit = null;   // the node lit right now
   const colourOf = (key) => {
     const p = body.layout()?.parts.find((q) => q.key === key);
     return p ? CONFIG.palette.flat.parts[p.lib] : null;
@@ -415,16 +415,14 @@ export function createNodes({ body }) {
     else if (params.highlight === key) { params.highlight = null; params.highlightColour = null; }
   };
   for (const k of Object.keys(PART_OF)) {
-    const node = TOOLS[k];
-    node.addEventListener('pointerenter', () => light(k, true));
-    node.addEventListener('pointerleave', () => { if (pinned !== k) light(k, false); });
-    node.addEventListener('click', (e) => {
-      if (e.target.closest('.ctl')) return;                     // (closing it is not a pin)
-      if (pinned && pinned !== k) light(pinned, false);
-      pinned = pinned === k ? null : k;
-      light(k, true);
-    });
+    TOOLS[k].addEventListener('pointerenter', () => { if (lit && lit !== k) light(lit, false); lit = k; light(k, true); });
+    TOOLS[k].addEventListener('pointerleave', () => { if (lit === k) { lit = null; light(k, false); } });
   }
+  // safety net: if the leave was missed (the node hidden or moved under the pointer), clear it
+  window.addEventListener('pointermove', (e) => {
+    if (lit && !TOOLS[lit].contains(document.elementFromPoint(e.clientX, e.clientY))) { light(lit, false); lit = null; }
+  }, { passive: true });
+
 
   // show / hide all the tools at once (pill next to the case switch)
   let toolsOn = true;
