@@ -1,5 +1,5 @@
-import { speakerHolesGLSL } from './glsl-speaker.js?v=202610071424';
-import { partsGLSL } from './glsl-parts.js?v=202610071424';
+import { speakerHolesGLSL } from './glsl-speaker.js?v=202610071438';
+import { partsGLSL } from './glsl-parts.js?v=202610071438';
 
 /**
  * Body shaders (GLSL ES 3.00 / WebGL2).
@@ -2780,6 +2780,7 @@ uniform sampler2D uG;      // the cell pass: b = depth where a part or cable fir
 uniform float uCellPx;
 uniform vec2  uGridOff;
 uniform vec2  uCellRange;  // near, far of that depth (mm along the ray)
+uniform vec3  uHiCol;      // the highlighted part's colour (the node's palette); 0 = its 'colour' style colour
 layout(location = 1) out vec4 outOuter;
 layout(location = 2) out vec4 outMeta;   // for the outlines: part id, depth, face class
 
@@ -2934,7 +2935,11 @@ void main() {
       col = typeC * faceK;
     }
     if (led && cs != 0) col = cs == 3 || cs == 5 ? INK : vec3(0.17) * uPartTint;   // the face reads dark
-    if (!cable && hi == uHi) col = mix(col, vec3(0.95, 0.3, 0.2), 0.45);
+    // the part a node points at (hover / click): in its own 'colour' style colour, the face still reads
+    if (!cable && hi == uHi) {
+      vec3 hc = dot(uHiCol, vec3(1.0)) > 0.0 ? uHiCol : typeC;
+      col = led ? INK : hc * (lum < 0.3 ? 0.84 : 1.0) * mix(1.0, faceK, 0.45);
+    }
     col = min(col, vec3(1.0));
     bool tileLike = uPartStyle == 6 || uPartStyle == 8;   // drawn from the cells, no 3D layer
     if (!tileLike) {

@@ -1,4 +1,4 @@
-import { state, setStretch } from '../state.js?v=202610071424';
+import { state, setStretch } from '../state.js?v=202610071438';
 
 const NS = 'http://www.w3.org/2000/svg';
 const MIN = 1, MAX = 2;           // stretch range: the fitted shape … twice as wide / tall
@@ -9,7 +9,7 @@ const BASE = 22;                  // pad px of the half size at stretch 1
  * or anywhere on the pad) to make the skin wider (x) and taller (y); the dashed square
  * is the fitted size. Double-click: back to the fit. The parts inside never change.
  */
-export function createStretchPad({ onChange = () => {}, layout = () => null, pad: skinPad = () => 6 } = {}) {
+export function createStretchPad({ onChange = () => {} } = {}) {
   const node = document.createElement('div');
   node.className = 'node str tool hidden';
   node.innerHTML = `<div class="tab">stretch</div>
@@ -21,53 +21,12 @@ export function createStretchPad({ onChange = () => {}, layout = () => null, pad
         <path class="arrow h"/><path class="arrow v"/>
         <circle class="handle" r="3.2"/>
       </svg>
-      <div class="val"></div>
-      <div class="value"><span class="k">minimum</span><span class="v min">–</span></div>
-      <div class="value tight"><span class="k">now</span><span class="v now">–</span></div>
     </div>`;
   document.body.appendChild(node);
   const pad = node.querySelector('.pad');
   const shape = node.querySelector('.shape');
   const handle = node.querySelector('.handle');
   const ah = node.querySelector('.arrow.h'), av = node.querySelector('.arrow.v');
-  const val = node.querySelector('.val');
-  const minEl = node.querySelector('.min'), nowEl = node.querySelector('.now');
-
-  /**
-   * The smallest shape that still holds the parts: the fitted profile (a primitive) or the
-   * parts' box plus the skin's padding (the free skin) — width × height in mm, at stretch 1.
-   */
-  function minSize() {
-    const L = layout();
-    if (!L) return null;
-    const lo = [Infinity, Infinity], hi = [-Infinity, -Infinity];
-    const grow = (x0, y0, x1, y1) => { lo[0] = Math.min(lo[0], x0); lo[1] = Math.min(lo[1], y0); hi[0] = Math.max(hi[0], x1); hi[1] = Math.max(hi[1], y1); };
-    if (L.prims?.length) {
-      for (const P of L.prims) {
-        if (P.kind === 1) grow(P.c[0] - P.h[0], P.c[1] - P.h[1], P.c[0] + P.h[0], P.c[1] + P.h[1]);
-        else if (P.kind === 4) grow(P.c[0] - P.a, P.c[1] - P.h[1], P.c[0] + P.a, P.c[1] + P.a);
-        else { const r = P.kind === 2 ? P.a : P.a / Math.cos(Math.PI / P.n); grow(P.c[0] - r, P.c[1] - r, P.c[0] + r, P.c[1] + r); }
-      }
-    } else {
-      const e = skinPad();
-      for (const p of L.parts) {
-        const R = p.R, h = p.h;
-        const ex = Math.abs(R[0]) * h[0] + Math.abs(R[3]) * h[1] + Math.abs(R[6]) * h[2];
-        const ey = Math.abs(R[1]) * h[0] + Math.abs(R[4]) * h[1] + Math.abs(R[7]) * h[2];
-        grow(p.c[0] - ex - e, p.c[1] - ey - e, p.c[0] + ex + e, p.c[1] + ey + e);
-      }
-    }
-    return lo[0] < hi[0] ? [hi[0] - lo[0], hi[1] - lo[1]] : null;
-  }
-  function drawSize() {
-    const m = minSize();
-    if (!m) return;
-    const [sx, sy] = state.stretch;
-    minEl.textContent = `${Math.round(m[0])} × ${Math.round(m[1])} mm`;
-    nowEl.textContent = `${Math.round(m[0] * sx)} × ${Math.round(m[1] * sy)} mm`;
-  }
-  setInterval(drawSize, 400);   // the parts can change under it (a knob, a screen, a shape)
-
   function draw() {
     const [sx, sy] = state.stretch;
     const w = BASE * sx, h = BASE * sy;
@@ -78,8 +37,6 @@ export function createStretchPad({ onChange = () => {}, layout = () => null, pad
     const a = w - 6, b = h - 6;
     ah.setAttribute('d', `M${-a} 0H${a}M${-a + 3} -3L${-a} 0L${-a + 3} 3M${a - 3} -3L${a} 0L${a - 3} 3`);
     av.setAttribute('d', `M0 ${-b}V${b}M-3 ${-b + 3}L0 ${-b}L3 ${-b + 3}M-3 ${b - 3}L0 ${b}L3 ${b - 3}`);
-    val.textContent = `w ×${sx.toFixed(2)} · h ×${sy.toFixed(2)}`;
-    drawSize();
   }
   draw();
 

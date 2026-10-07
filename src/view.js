@@ -1,4 +1,4 @@
-import { CONFIG } from './config.js?v=202610071424';
+import { CONFIG } from './config.js?v=202610071438';
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];

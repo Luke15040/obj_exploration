@@ -1,14 +1,14 @@
-import { CONFIG } from '../config.js?v=202610071424';
-import { state, params } from '../state.js?v=202610071424';
-import { view } from '../view.js?v=202610071424';
-import { Spring } from './springs.js?v=202610071424';
-import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, markerShader, densityShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610071424';
-import { gbufferShader, edgeShader } from './blockshaders.js?v=202610071424';
-import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610071424';
-import { traceStrokes } from './strokes.js?v=202610071424';
-import { generateBlueNoise } from './bluenoise.js?v=202610071424';
-import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610071424';
-import { holePattern } from '../speaker-patterns.js?v=202610071424';
+import { CONFIG } from '../config.js?v=202610071438';
+import { state, params } from '../state.js?v=202610071438';
+import { view } from '../view.js?v=202610071438';
+import { Spring } from './springs.js?v=202610071438';
+import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, markerShader, densityShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610071438';
+import { gbufferShader, edgeShader } from './blockshaders.js?v=202610071438';
+import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610071438';
+import { traceStrokes } from './strokes.js?v=202610071438';
+import { generateBlueNoise } from './bluenoise.js?v=202610071438';
+import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610071438';
+import { holePattern } from '../speaker-patterns.js?v=202610071438';
 
 const METHODS = { bayer: 0, blue: 1, split: 2 };
 
@@ -1445,7 +1445,7 @@ export function createBody(canvas) {
     const J = (o) => JSON.stringify(o, (k, v) => (typeof v === 'number' ? mm(v) : v));
     const key = [size.w, size.h, Math.round(view.focal() * pxr() * 10), Math.round(view.cx * 10), Math.round(view.cy * 10), ...cam.pos.map(mm), ...cam.right.map(dir), ...cam.up.map(dir)].join(',')
       + '|' + J(extras) + '|' + J(layout?.parts?.map((q) => q.c)) + '|' + J(layout?.stretch) + '|' + J(layout?.prims) + '|' + J(layout?.cables?.map((q) => q.points))
-      + '|' + vName + pstyle + outerOn + hs + params.look + params.highlight + state.speakerPattern + state.leds.join('');
+      + '|' + vName + pstyle + outerOn + hs + params.look + params.highlight + params.highlightColour + state.speakerPattern + state.leds.join('');
     crossHifi.resize(size.w, size.h);
     if (key !== crossHifi.key) {
       crossHifi.key = key;
@@ -1497,6 +1497,7 @@ export function createBody(canvas) {
           gl.uniform3fv(u.uPartTint, X.tint ?? [1, 1, 1]);
           gl.uniform1f(u.uOuterOn, outerOn ? 1 : 0);
           gl.uniform1i(u.uSteps, 110);
+          gl.uniform3fv(u.uHiCol, params.highlightColour ? hexToRgb(params.highlightColour) : [0, 0, 0]);
           bindTex(4, gtarget.tex, u.uG);
           gl.uniform1f(u.uCellPx, cell * hs);
           gl.uniform2f(u.uGridOff, off[0] * hs, off[1] * hs);

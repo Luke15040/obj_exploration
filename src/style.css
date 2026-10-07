@@ -1162,6 +1162,14 @@ body.look-1 .spk .seg button::before, body.look-1 .spk .seg button::after { cont
 
 html.wheel-hover, html.wheel-hover * { cursor: ew-resize !important; }
 html.wheel-dragging, html.wheel-dragging * { cursor: ew-resize !important; }
+/* a node whose part is lit up (hover / click): its frame takes the part's colour */
+body.look-1 .node.tool.hl { --nd-frame: var(--hl); --nd-edge: var(--hl); }
+body.look-1 .node.tool.hl .ctl .grip { background-image: radial-gradient(circle, rgba(0, 0, 0, 0.45) 1.3px, transparent 1.6px); }
+body.look-1 .node.tool.hl .ctl .x { color: rgba(0, 0, 0, 0.55); }
+.node.tool { transition: background-color 160ms, border-color 160ms; }
+/* views node: a fixed width (the view's name below changes length and made it jump) */
+body.look-1 .node.tool.vws .card { width: 172px; }
+body.look-1 .vws .value .v { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* wheels node: the wheel to scale, a diameter slider, the size */
 .node.tool.whl .card { width: auto; padding: 9px 9px 8px; }
 .whl .wheel { display: block; width: 72px; height: 72px; margin: 0 auto 4px; color: var(--ink); }

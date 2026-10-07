@@ -1,11 +1,11 @@
-import { CONFIG } from '../config.js?v=202610071424';
-import { state } from '../state.js?v=202610071424';
-import { view } from '../view.js?v=202610071424';
-import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js?v=202610071424';
-import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js?v=202610071424';
-import { SCREENS } from '../config.js?v=202610071424';
-import { refImageURL, REF_LABELS } from './refimages.js?v=202610071424';
-import { playVoice } from './sound.js?v=202610071424';
+import { CONFIG } from '../config.js?v=202610071438';
+import { state, params } from '../state.js?v=202610071438';
+import { view } from '../view.js?v=202610071438';
+import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js?v=202610071438';
+import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js?v=202610071438';
+import { SCREENS } from '../config.js?v=202610071438';
+import { refImageURL, REF_LABELS } from './refimages.js?v=202610071438';
+import { playVoice } from './sound.js?v=202610071438';
 
 const NS = 'http://www.w3.org/2000/svg';
 const easeOut = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
@@ -396,6 +396,35 @@ export function createNodes({ body }) {
     node.querySelector('.tab').addEventListener('dblclick', () => { delete placed[k]; });
   }
   for (const [k, node] of Object.entries(TOOLS)) setupTool(k, node);
+
+  // hover a node — or click it to keep it — and its part lights up in its 'colour' style colour,
+  // the node's frame too, so you see which is which
+  const PART_OF = { screen: 'matrix', speaker: 'speaker-0', energy: 'battery' };
+  // the nodes' own palette (yellow · orange · cyan · olive)
+  const NODE_COLOUR = { screen: '#ff8c55', speaker: '#e7e96c', energy: '#a0e0e0', wheels: '#8b8f63' };
+  let pinned = null;
+  const colourOf = (key) => {
+    const p = body.layout()?.parts.find((q) => q.key === key);
+    return p ? CONFIG.palette.flat.parts[p.lib] : null;
+  };
+  const light = (k, on) => {
+    const node = TOOLS[k], key = PART_OF[k], c = on && colourOf(key) ? NODE_COLOUR[k] : null;
+    node.classList.toggle('hl', !!c);
+    if (c) node.style.setProperty('--hl', c); else node.style.removeProperty('--hl');
+    if (c) { params.highlight = key; params.highlightColour = c; }
+    else if (params.highlight === key) { params.highlight = null; params.highlightColour = null; }
+  };
+  for (const k of Object.keys(PART_OF)) {
+    const node = TOOLS[k];
+    node.addEventListener('pointerenter', () => light(k, true));
+    node.addEventListener('pointerleave', () => { if (pinned !== k) light(k, false); });
+    node.addEventListener('click', (e) => {
+      if (e.target.closest('.ctl')) return;                     // (closing it is not a pin)
+      if (pinned && pinned !== k) light(pinned, false);
+      pinned = pinned === k ? null : k;
+      light(k, true);
+    });
+  }
 
   // show / hide all the tools at once (pill next to the case switch)
   let toolsOn = true;

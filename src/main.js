@@ -1,23 +1,23 @@
-import { view } from './view.js?v=202610071424';
-import { state, setWheelSpread } from './state.js?v=202610071424';
-import { createOrbit } from './orbit.js?v=202610071424';
-import { createBody } from './body/body.js?v=202610071424';
-import { createComponents } from './components/components.js?v=202610071424';
-import { attachDrag } from './components/drag.js?v=202610071424';
-import { createExtras } from './components/extras.js?v=202610071424';
-import { createDebugPanel } from './debug/panel.js?v=202610071424';
-import { createPrompts } from './prompts.js?v=202610071424';
-import { createNodes } from './ui/nodes.js?v=202610071424';
-import { createBom } from './ui/bom.js?v=202610071424';
-import { createPartLabels } from './ui/labels.js?v=202610071424';
-import { createDiagram } from './ui/diagram.js?v=202610071424';
-import { createViewToggle } from './debug/viewtoggle.js?v=202610071424';
-import { createViewPad } from './ui/viewpad.js?v=202610071424';
-import { createFrame } from './ui/frame.js?v=202610071424';
-import { createGridPanel } from './ui/gridpanel.js?v=202610071424';
-import { createStretchPad } from './ui/stretchpad.js?v=202610071424';
-import { createSnapPad } from './ui/snappad.js?v=202610071424';
-import { createWheelPad } from './ui/wheelpad.js?v=202610071424';
+import { view } from './view.js?v=202610071438';
+import { state, setWheelSpread } from './state.js?v=202610071438';
+import { createOrbit } from './orbit.js?v=202610071438';
+import { createBody } from './body/body.js?v=202610071438';
+import { createComponents } from './components/components.js?v=202610071438';
+import { attachDrag } from './components/drag.js?v=202610071438';
+import { createExtras } from './components/extras.js?v=202610071438';
+import { createDebugPanel } from './debug/panel.js?v=202610071438';
+import { createPrompts } from './prompts.js?v=202610071438';
+import { createNodes } from './ui/nodes.js?v=202610071438';
+import { createBom } from './ui/bom.js?v=202610071438';
+import { createPartLabels } from './ui/labels.js?v=202610071438';
+import { createDiagram } from './ui/diagram.js?v=202610071438';
+import { createViewToggle } from './debug/viewtoggle.js?v=202610071438';
+import { createViewPad } from './ui/viewpad.js?v=202610071438';
+import { createFrame } from './ui/frame.js?v=202610071438';
+import { createGridPanel } from './ui/gridpanel.js?v=202610071438';
+import { createStretchPad } from './ui/stretchpad.js?v=202610071438';
+import { createSnapPad } from './ui/snappad.js?v=202610071438';
+import { createWheelPad } from './ui/wheelpad.js?v=202610071438';
 
 const canvas = document.getElementById('body-layer');
 // if the GPU resets (driver timeout), come back with a fresh page once it is available again
@@ -51,8 +51,6 @@ if (document.body.dataset.page === 'cross') {
   let pending = 0;
   nodes.addTool('stretch', createStretchPad({
     onChange: () => { cancelAnimationFrame(pending); pending = requestAnimationFrame(() => prompts.placeAll()); },
-    layout: () => body.layout(),
-    pad: () => state.body.padding,
   }), {
     name: 'stretch',
     icon: '<svg viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg>',
