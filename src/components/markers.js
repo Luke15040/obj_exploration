@@ -1,7 +1,7 @@
-import { CONFIG } from '../config.js?v=202610071417';
-import { params } from '../state.js?v=202610071417';
-import { view } from '../view.js?v=202610071417';
-import { basis } from './wire.js?v=202610071417';
+import { CONFIG } from '../config.js?v=202610071420';
+import { params } from '../state.js?v=202610071420';
+import { view } from '../view.js?v=202610071420';
+import { basis } from './wire.js?v=202610071420';
 
 /**
  * Snap markers — one visual language for every snap point (add-ons on a face, the

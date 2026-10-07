@@ -1,7 +1,7 @@
-import { state, moveWheel, moveScreen, setScreenSpot } from '../state.js?v=202610071417';
-import { SCREEN_SPOTS, screenSlotFor } from '../parts.js?v=202610071417';
-import { view } from '../view.js?v=202610071417';
-import { drawMarkers } from './markers.js?v=202610071417';
+import { state, moveWheel, moveScreen, setScreenSpot } from '../state.js?v=202610071420';
+import { SCREEN_SPOTS, screenSlotFor } from '../parts.js?v=202610071420';
+import { view } from '../view.js?v=202610071420';
+import { drawMarkers } from './markers.js?v=202610071420';
 
 /** Current centre (mm) of a part by its data-part name. */
 function partPos(part) {

@@ -1,4 +1,4 @@
-import { params } from '../state.js?v=202610071417';
+import { params } from '../state.js?v=202610071420';
 
 // three pages: the main one, lab.html with every particle / dither experiment, cross.html with only the cross view
 const LAB = document.body.dataset.page === 'lab';

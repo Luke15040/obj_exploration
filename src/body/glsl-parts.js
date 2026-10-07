@@ -253,7 +253,7 @@ vec2 matrixModel(vec3 q) {
   vec2 r = vec2(pcbSlab(q.xzy, vec2(25.65, 19.5), 0.9, 0.8, 1.5, vec2(23.15, 17.0), 1.25), M_BLACK);
   vec2 cell = clamp(floor((q.xy + vec2(19.5, 13.5)) / 3.0), vec2(0.0), vec2(12.0, 8.0));
   vec2 c = q.xy - (cell * 3.0 - vec2(18.0, 12.0));
-  float led = pBox(vec3(c, q.z - 2.0), vec3(1.0, 1.0, 0.3));
+  float led = pBox(vec3(c, q.z - 2.0), vec3(1.22, 1.22, 0.3));   // (drawn a little larger than the 2 mm LEDs: thin lines between them)
   float lit = litLED(vec2(cell.x, 8.0 - cell.y));
   r = pU(r, vec2(led, lit > 0.5 ? M_LED_LIT : M_LED_OFF));
   r = pU(r, vec2(pBox(vec3(abs(q.x) - 19.0, q.y + 14.0, q.z + 1.1), vec3(3.0, 2.1, 1.2)), M_WHITE)); // STEMMA QT × 2
