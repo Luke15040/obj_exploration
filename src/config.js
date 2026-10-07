@@ -59,14 +59,86 @@ export const CONFIG = {
     // (the rest of the body is grown around the real parts: see parts.js)
   },
 
+  /** live view: point cloud crowding on the outlines */
+  live: { cellPx: 4.5, dotPx: 0.85, skin: '#d9d6cf', line: '#f4f2ec' },   // 2D, on black: one point per cell (CSS px)
+  /** cross view: rounded cell islands on a grid of crosses (the crosses double as snap points) */
+  // (the shape clearly darker than the page, the faces well apart; the page dots recede)
+  cross: { movingRes: 1, redraw: 0.9, out: 0.45, cellMm: 6, light: '#c9c9d0', top: '#dcdce2', side: '#adadb6', wheel: '#9c9ca5', dot: '#7c7c86', pageDot: '#c2c2c7', partCell: '#55555d',
+    // look a: the same warm greys as the grey pixel 3d of look a; parts get its mauve tint
+    lookA: { light: '#cbc9c4', top: '#dad8d3', side: '#b1aea8', wheel: '#a29f99', dot: '#817e78', pageDot: '#c9c7c2', partCell: '#57544f', tint: [1, 0.965, 0.98] } },   // page marks as strong as before; partCell = parts as tiles
+
+  /** picasso view: ink on paper (ref: the bull lithographs) */
+  picasso: { ink: '#141312' },
+
+  /** particles view: a 3D point cloud on the surfaces, like a scan */
+  particles: { cellPx: 9, fill: 0.5, partFill: 0.7, rings: 0.16, dotR: 0.28, ink: '#f4f2ec', line: '#e9e7e2', partLine: '#8d8b86' },
+
+  /** density view: the parts as a kernel-density contour plot (8 colours: page tint, then bands outside → in) */
+  density: {
+    spreadMm: 16,        // halo spread of each part
+    line: '#ffffff',     // the parts: white outlines
+    palette: 0,
+    palettes: [
+      ['#f7eef0', '#f0d9dd', '#e6bfca', '#d4a0b8', '#b77fa5', '#8f6093', '#634478', '#36294f'],   // pink → plum
+      ['#eef5ee', '#d6e8d4', '#b6d3b2', '#8fb98d', '#6a9a6c', '#4d7a54', '#36593d', '#233a28'],   // sage → forest
+      ['#eef0f9', '#d8dcf0', '#bcc3e3', '#9aa5d0', '#7a87ba', '#5d6aa0', '#434f80', '#2b3459'],   // lavender → ink blue
+      ['#f8f1e8', '#f0dcc2', '#e6c095', '#d79f6b', '#bd7c4b', '#985c36', '#6e4129', '#47291b'],   // sand → umber
+      ['#edf6f5', '#d0ebe7', '#a9d8d1', '#7fbfb6', '#579f98', '#3c7f7a', '#2a605d', '#1a3f3e'],   // mint → deep teal
+      ['#fbefe9', '#f6d3c6', '#efb09b', '#e48a72', '#cf6551', '#ab4a3d', '#80342d', '#55211e'],   // peach → brick
+    ],
+  },
+
+  /** marker view: felt-pen fills per face on a pale blue page (ref "Balance") */
+  marker: {
+    cellPx: 1.6, redraw: 1.0, front: '#2547a8', side: '#ee3340', top: '#f4a089', back: '#2d4fb0', page: '#cdd7e6',
+    // the parts in the same pens: deep navy, yellow, orange, ivory, plum…
+    parts: {
+      servo: '#1b2a6b', feather: '#f2b632', piZero: '#1e2f78', respeaker: '#7a2f6a', speaker: '#222433', speakerSmall: '#222433',
+      encoder: '#f2c230', matrix: '#f1ece1', oled: '#f1ece1', servoAdapter: '#2b3a8f', pdTrigger: '#f08a2c',
+      battery: '#f08a2c', buck: '#f6d36b', qtHub: '#1b2a6b',
+    },
+  },
+
+  /** milk view: milky silicone body, parts inside each in its own clear colour (octobot-like) */
+  milk: {
+    skin: '#fbfbfa',
+    shade: '#d9dde3',
+    veil: 0.03,           // per mm: how quickly the silicone hides what is deeper inside
+    parts: {
+      servo: '#e8452c', feather: '#f28a1d', piZero: '#2f6fe0', respeaker: '#e5304f', speaker: '#1d9bd8',
+      encoder: '#f5a524', matrix: '#7b4fd6', oled: '#5b5bd6', servoAdapter: '#d6336c', pdTrigger: '#21a89f',
+      battery: '#2bb673', buck: '#f2c230', qtHub: '#7d8fd6',
+    },
+  },
+
+  /** flat hd: length of the hand-drawn redraw after a view change (s) */
+  flatHd: { redraw: 1.6 },
+
+  /** sketch view: cell size of the stepped pencil line (mm) */
+  sketch: { cellMm: 5 },
+
   /** Orbit camera around (0, viewCenterY, 0). Angles in degrees. */
   camera: {
-    distance: 700,        // mm; perspective strength (larger = flatter)
-    yaw: -28,             // default 3/4 view
-    pitch: 14,
+    distance: 4000,       // mm; perspective strength (larger = flatter) — far: near-parallel, like real orthographic / axonometric views
+    yaw: -45,             // default 3/4 view (axonometric)
+    pitch: 35,
     yawRange: null,       // free: all the way round
     pitchRange: [-35, 85],
-    parallax: [4, 2.5],   // degrees of yaw / pitch that follow the cursor
+    parallax: [0, 0],     // degrees of yaw / pitch that follow the cursor (off: views stay on the snap grid)
+    // no free orbit: only the essential drawn views. Turning goes front → axonometric → side → …
+    // (orthographic elevations at every 90°, axonometric from above in between); up = plan (top)
+    snap: {
+      freeYaw: 0.35, freePitch: 0.3, freeMin: -10,   // cross: free turn, degrees per px · lowest pitch
+      turnOut: 0.22,      // cross: s for the tiles to shrink away when a free turn starts
+      yaw: 45,            // step between elevation and axonometric
+      axo: 35,            // pitch of the axonometric views
+      top: 89.5,          // pitch of the plan view
+      dragPx: 70,         // drag distance per step
+    },
+    redraw: 0.85,         // s: how long the drawing takes to grow back after a view change
+    zoom: 1.25,           // fixed framing: a little closer than the fit (no mouse-wheel zoom)
+    glide: 0.7,           // s: cross / flat hd 2 — the parts glide to the new view before the shape is built
+    buildAt: 0.65,        // the shape starts building at this point of the glide (1 = only once the parts have arrived)
   },
 
   /** Key light direction in world space (x right, y up, z toward the viewer). */
@@ -136,6 +208,11 @@ export const CONFIG = {
     empty: { ink: '#2f2fa8', hi: '#f0382c', paper: '#c9ccd6' },
     // "empty" in look a (prototype): warm charcoal ink on a sand grid
     emptyA: { ink: '#3a3732', hi: '#c4492e', paper: '#dcd8cf' },
+    // "sketch": pencil shape on graph paper, real-colour parts
+    sketch: { ink: '#2f2fa8', soft: '#9da0d8', hi: '#f0382c', paper: '#c9ccd6' },   // blue, like empty
+    // "flat hd": pale tint of the shape's faces (white = lighter than the page)
+    flatHdFill: '#ffffff',
+    flatHdLine: '#2f2fa8',   // flat hd: the whole shape in one blue (like empty / sketch)
     // "blob": metaballs, a few warm and cool families (order = part type index)
     blob: {
       parts: {

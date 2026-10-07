@@ -1,11 +1,11 @@
-import { CONFIG } from '../config.js?v=202610021927';
-import { state } from '../state.js?v=202610021927';
-import { view } from '../view.js?v=202610021927';
-import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js?v=202610021927';
-import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js?v=202610021927';
-import { SCREENS } from '../config.js?v=202610021927';
-import { refImageURL, REF_LABELS } from './refimages.js?v=202610021927';
-import { playVoice } from './sound.js?v=202610021927';
+import { CONFIG } from '../config.js?v=202610071417';
+import { state } from '../state.js?v=202610071417';
+import { view } from '../view.js?v=202610071417';
+import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js?v=202610071417';
+import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js?v=202610071417';
+import { SCREENS } from '../config.js?v=202610071417';
+import { refImageURL, REF_LABELS } from './refimages.js?v=202610071417';
+import { playVoice } from './sound.js?v=202610071417';
 
 const NS = 'http://www.w3.org/2000/svg';
 const easeOut = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
@@ -151,16 +151,23 @@ export function createNodes({ body }) {
       </div>
       <div class="seg types"><button data-spk="speaker" title="Seeed 4Ω 5W · 50 × 45 × 22">5 w</button><button data-spk="speakerSmall" title="Seeed 6Ω 2W · 28 × 31 × 15">2 w</button></div>
       <div class="seg voices" hidden>${['beep', 'chirp', 'hum'].map((v) => `<button data-voice="${v}">${v}</button>`).join('')}</div>
+      <div class="value"><span class="k">now</span><span class="v"></span></div>
     </div>`;
   document.body.appendChild(spk);
   const spkLink = makeLink('ink');
   const viz = spk.querySelector('.viz');
+  // what the speaker node shows in words: the speaker itself
+  const SPK_NAMES = { speaker: 'Seeed 4 Ω · 5 W', speakerSmall: 'Seeed 6 Ω · 2 W' };
+  const drawSpkText = () => {
+    spk.querySelector('.value .v').textContent = SPK_NAMES[state.speakerLib] ?? state.speakerLib;
+  };
   // ‹ › cycle the grille pattern
   spk.querySelectorAll('.arrow').forEach((b) => b.addEventListener('click', () => {
     const i = SPEAKER_PATTERNS.indexOf(state.speakerPattern);
     const next = SPEAKER_PATTERNS[(i + Number(b.dataset.step) + SPEAKER_PATTERNS.length) % SPEAKER_PATTERNS.length];
     setSpeakerPattern(next);
     viz.querySelector('svg').innerHTML = holesSvg(next);
+    drawSpkText();
     const e = currentSpeaker();
     if (e) { const [x, y] = view.project(...e.p); body.ripple(x, y); }
   }));
@@ -170,6 +177,7 @@ export function createNodes({ body }) {
   const syncSound = () => {
     spk.querySelectorAll('.voices button').forEach((b) => b.classList.toggle('on', b.dataset.voice === sound.voice));
     spk.querySelectorAll('.types button').forEach((b) => b.classList.toggle('on', b.dataset.spk === state.speakerLib));
+    drawSpkText();
     const e = currentSpeaker();
     if (e) e.sound = { voice: sound.voice }; // read by snapshot() for the later CAD step
   };
@@ -301,13 +309,17 @@ export function createNodes({ body }) {
   ];
   const shp = document.createElement('div');
   shp.className = 'node shp tool hidden';
+  const FORM_SHORT = { free: 'free', box: 'square', pentagon: 'penta', hexagon: 'hexa', dome: 'dome', totem: 'modular' };
   shp.innerHTML = `<div class="tab">primitives</div>
     <div class="card">
-      <div class="forms">${FORMS.map(([k, label, icon]) => `<button data-form="${k}" title="${label}"><svg viewBox="0 0 24 24">${icon}</svg></button>`).join('')}</div>
+      <div class="forms">${FORMS.map(([k, label, icon]) => `<button data-form="${k}" title="${label}"><svg viewBox="0 0 24 24">${icon}</svg><span>${FORM_SHORT[k] ?? label}</span></button>`).join('')}</div>
+      <div class="value"><span class="k">shape</span><span class="v"></span></div>
     </div>`;
   document.body.appendChild(shp);
   const drawShape = () => {
     shp.querySelectorAll('[data-form]').forEach((b) => b.classList.toggle('on', b.dataset.form === state.shape));
+    const f = FORMS.find(([k]) => k === state.shape);
+    shp.querySelector('.value .v').textContent = f ? f[1] : state.shape;
   };
   drawShape();
   shp.querySelector('.forms').addEventListener('click', (e) => {
@@ -333,7 +345,10 @@ export function createNodes({ body }) {
   document.body.appendChild(toolbox);
   // open / closed per tool; screen and speaker open by themselves when they arrive (prompts), energy on demand
   const open = { shape: true, screen: true, speaker: true, energy: false };
+  const extraTools = {};   // tools added from outside (views): k → always available
   const placed = {};      // tools the user dragged somewhere: { left, top } in px (otherwise they stack on the right)
+  let homes = {};         // default places (fractions of the window, cross page): k → [fx, fy]
+  window.addEventListener('resize', () => { for (const k in placed) if (placed[k].home) delete placed[k]; });
 
   /**
    * Node header (look 1): the title in a dark tab with a slanted edge, and on the frame a drag
@@ -354,14 +369,13 @@ export function createNodes({ body }) {
     hdr.appendChild(ctl);
     ctl.querySelector('.x').addEventListener('click', onPress);
   };
-  for (const [k, node] of Object.entries(TOOLS)) decorate(node, '×', 'close', () => { open[k] = false; });
   decorate(ref, '−', 'hide', () => ref.classList.add('hidden'), true);
 
-
-  // drag a tool by its label (or any empty part of its card)
-  for (const [k, node] of Object.entries(TOOLS)) {
+  // header + drag by the label (or any empty part of the card); double-click the label: back to its place
+  function setupTool(k, node) {
+    decorate(node, '×', 'close', () => { open[k] = false; });
     node.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0 || e.target.closest('button, .leds, svg')) return;
+      if (e.button !== 0 || e.target.closest('button, .leds, svg, input')) return;   // (sliders work, not drag the node)
       e.preventDefault();
       const r = node.getBoundingClientRect();
       const off = [e.clientX - r.left, e.clientY - r.top];
@@ -379,9 +393,9 @@ export function createNodes({ body }) {
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
     });
-    // double-click the label: back to its place in the stack
     node.querySelector('.tab').addEventListener('dblclick', () => { delete placed[k]; });
   }
+  for (const [k, node] of Object.entries(TOOLS)) setupTool(k, node);
 
   // show / hide all the tools at once (pill next to the case switch)
   let toolsOn = true;
@@ -398,6 +412,21 @@ export function createNodes({ body }) {
   requestAnimationFrame(placeToolsBtn);
   window.addEventListener('resize', placeToolsBtn);
   const had = { shape: false, screen: false, speaker: false, energy: false };
+
+  /** Add a tool node from outside (e.g. the views): always available, open, with an icon in the log. */
+  function addTool(k, node, { name, icon, when = () => true }) {
+    TOOLS[k] = node;
+    open[k] = true;
+    had[k] = true;
+    extraTools[k] = when;   // shown while when() is true
+    const b = document.createElement('button');
+    b.dataset.tool = k;
+    b.title = name;
+    b.setAttribute('aria-label', name);
+    b.innerHTML = icon;
+    toolbox.appendChild(b);
+    setupTool(k, node);
+  }
   toolbox.addEventListener('click', (e) => {
     const k = e.target.closest('[data-tool]')?.dataset.tool;
     if (k) open[k] = !open[k];
@@ -414,8 +443,9 @@ export function createNodes({ body }) {
       placedKind = lookNow;
       for (const k in placed) if (placed[k].auto) delete placed[k];
     }
-    const pending = ['shape', 'screen', 'speaker', 'energy'].filter((k) => !TOOLS[k].classList.contains('hidden') && !placed[k]);
-    for (const k of ['shape', 'screen', 'speaker', 'energy']) {
+    for (const k in homes) if (!placed[k]) placed[k] = { left: Math.round(homes[k][0] * window.innerWidth), top: Math.round(homes[k][1] * window.innerHeight), home: true };
+    const pending = Object.keys(TOOLS).filter((k) => !TOOLS[k].classList.contains('hidden') && !placed[k]);
+    for (const k of Object.keys(TOOLS)) {
       const n = TOOLS[k];
       if (n.classList.contains('hidden') || !placed[k]) continue;
       n.style.left = `${placed[k].left}px`; n.style.right = 'auto'; n.style.top = `${placed[k].top}px`;
@@ -434,7 +464,7 @@ export function createNodes({ body }) {
     const pw = L.parts.find((q) => q.key === 'battery');
     const sp = screenPart();
     const target = { shape: null, screen: sp?.c, speaker: e?.p, energy: pw?.c };
-    const prefer = { shape: 'left', screen: 'right', speaker: 'right', energy: 'left' };   // when a part sits in the middle
+    const prefer = { shape: 'left', screen: 'right', speaker: 'right', energy: 'left', views: 'right' };   // when a part sits in the middle
     const vw = window.innerWidth, vh = window.innerHeight;
     const rightEdge = vw - 20;
     const list = document.querySelector('.node.bom')?.getBoundingClientRect();
@@ -536,6 +566,7 @@ export function createNodes({ body }) {
     // which tools the object has right now
     const e = currentSpeaker();
     const avail = { shape: state.kind === 'speaker', screen: state.kind === 'robot' || state.withScreen, speaker: !!e, energy: true };
+    for (const k in extraTools) avail[k] = extraTools[k]();
     if (!shp.classList.contains('hidden')) drawShape();
     toolbox.style.display = toolsOn ? '' : 'none';
     for (const k in avail) {
@@ -587,5 +618,8 @@ export function createNodes({ body }) {
     },
     set onApply(fn) { onApply = fn; },
     set onShape(fn) { onShape = fn; },
+    addTool,
+    /** Default places for some nodes, as fractions of the window ({ k: [fx, fy] }); a drag still moves them. */
+    setHomes(h) { homes = h; },
   };
 }

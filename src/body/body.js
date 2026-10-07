@@ -1,13 +1,14 @@
-import { CONFIG } from '../config.js?v=202610021927';
-import { state, params } from '../state.js?v=202610021927';
-import { view } from '../view.js?v=202610021927';
-import { Spring } from './springs.js?v=202610021927';
-import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader } from './shaders.js?v=202610021927';
-import { gbufferShader, edgeShader } from './blockshaders.js?v=202610021927';
-import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610021927';
-import { generateBlueNoise } from './bluenoise.js?v=202610021927';
-import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610021927';
-import { holePattern } from '../speaker-patterns.js?v=202610021927';
+import { CONFIG } from '../config.js?v=202610071417';
+import { state, params } from '../state.js?v=202610071417';
+import { view } from '../view.js?v=202610071417';
+import { Spring } from './springs.js?v=202610071417';
+import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, markerShader, densityShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610071417';
+import { gbufferShader, edgeShader } from './blockshaders.js?v=202610071417';
+import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610071417';
+import { traceStrokes } from './strokes.js?v=202610071417';
+import { generateBlueNoise } from './bluenoise.js?v=202610071417';
+import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610071417';
+import { holePattern } from '../speaker-patterns.js?v=202610071417';
 
 const METHODS = { bayer: 0, blue: 1, split: 2 };
 
@@ -36,7 +37,9 @@ export function createBody(canvas) {
   // dynamic resolution: drops a little when frames run slow, climbs back when there is headroom
   let quality = 1;
   let frameTime = 1 / 60, qualityClock = 0;
-  const pxr = () => Math.min(view.dpr, MAX_PIXEL_RATIO) * quality;
+  // (cross / cross 2 render at the screen's own pixel ratio, so their one-pixel marks stay crisp)
+  const crispView = () => params.view === 'cross' || params.view === 'cross2' || (params.view === 'dots' && params.dotStyle === 'grid');
+  const pxr = () => Math.min(view.dpr, crispView() ? 3 : MAX_PIXEL_RATIO) * quality;
   const gl = canvas.getContext('webgl2', { antialias: false, alpha: true, premultipliedAlpha: true });
   if (!gl) throw new Error('WebGL2 is not available');
 
@@ -77,6 +80,53 @@ export function createBody(canvas) {
   const emptyC = lazy(emptyCellShader);
   const emptyE = lazy(emptyEdgeShader);
   const blob = lazy(blobShader);
+  const sketch = lazy(sketchShader);
+  const flathd = lazy(flatHdShader);
+  const milk = lazy(milkShader);
+  const liveE = lazy(liveEdgeShader);
+  const liveD = lazy(liveDrawShader);
+  const liveTarget = createTarget(gl);   // per-cell edge proximity for the live view
+  let liveSize = '';
+  const crossV = lazy(crossShader);
+  // the hifi pass: one program per need (parts / boxes × with or without the outside)
+  const crossHv = { parts: lazy(crossHifiVariant([])), boxes: lazy(crossHifiVariant(['BOXES'])), outer: lazy(crossHifiVariant(['OUTER'])) };
+  const crossM = lazy(crossMaskShader);
+  let crossGhost = 0;   // cross: 0..1, the loose voxels while the object turns
+  // cross: the hifi layer (parts + outside) in two full-res textures, re-rendered only when its key changes
+  const crossHifi = (() => {
+    const mk = () => {
+      const t = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+      return t;
+    };
+    const parts = mk(), outer = mk(), meta = mk(), fbo = gl.createFramebuffer();
+    const depth = gl.createRenderbuffer();   // the mask: where the heavy pass may run
+    let w = 0, h = 0;
+    return {
+      parts, outer, meta, fbo, key: '',
+      resize(W, H) {
+        if (W === w && H === h) return;
+        w = W; h = H;
+        for (const t of [parts, outer, meta]) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, parts, 0);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, outer, 0);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, gl.TEXTURE_2D, meta, 0);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
+        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
+        gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        this.key = '';
+      },
+    };
+  })();
+  const markerV = lazy(markerShader);
+  const densV = lazy(densityShader);
+  const partV = lazy(particlesShader);
+  const picV = lazy(picassoShader);
+  const overV = lazy(overlayShader);
   const gbuf = lazy(gbufferShader);
   const edge = lazy(edgeShader);
   const blueTex = createR8Texture(gl, 64, generateBlueNoise(64));
@@ -85,8 +135,15 @@ export function createBody(canvas) {
   let prev = createTarget(gl);
   // background warm-up of every view's shaders, in the order of the view switch
   // (pixel 3d · dots · flat 1 · flat 2 · dither 1 · dither 2 · glass · empty), one every 350 ms
-  const WARM = { emptyC, pixel3d, cloud, flat2g, flat2e, flat, pixel, pixelD, pixel2, glass, emptyE };
+  // (the cross page has one view: warming the others there only keeps the driver busy for ~20 s)
+  const WARM = document.body.dataset.page === 'cross'
+    ? { emptyC, crossV, crossM, crossH: crossHv.parts }
+    : { emptyC, pixel3d, cloud, flat2g, flat2e, flat, pixel, pixelD, pixel2, glass, emptyE, sketch, flathd, crossV, crossH: crossHv.parts, markerV, densV, partV, picV };
   const t0 = performance.now(), readyAt = {};
+  if (document.body.dataset.page === 'cross') {
+    for (const q of Object.values(WARM)) q.warm();   // at once: they are needed now
+    setTimeout(() => crossHv.outer.warm(), 4000);   // then the outside, quietly, before anyone asks for it
+  }
   setTimeout(() => {
     // hand them all to the driver at once (it compiles on its own threads), then just watch
     for (const q of Object.values(WARM)) q.warm();
@@ -97,9 +154,36 @@ export function createBody(canvas) {
   }, 1500);
   window.__shaderStatus = () => ({ ...readyAt });   // debug: ms after load when each program was ready
   const gtarget = createTarget(gl); // full-res g-buffer for the blocks view
+  const g2target = createTarget(gl); // a second full-res g-buffer (density: part outlines)
+  let densA = createTarget(gl), densB = createTarget(gl), densFresh = true;   // density field, ping-pong (fluid memory)
   // cross-fade weight of each view (1 = fully shown)
-  const VIEWS = ['dots', 'blocks', 'flat', 'flat2', 'pixel', 'pixel2', 'empty', 'blob', 'orbital', 'pixel3d', 'glass'];
+  const VIEWS = ['dots', 'blocks', 'flat', 'flat2', 'pixel', 'pixel2', 'empty', 'blob', 'orbital', 'pixel3d', 'glass', 'sketch', 'flathd', 'flathd2', 'milk', 'live', 'cross', 'cross2', 'marker', 'density', 'particles', 'picasso'];
   const weight = Object.fromEntries(VIEWS.map((v) => [v, params.view === v ? 1 : 0]));
+  // view changes are redrawn, not orbited: the line views grow their drawing back around the parts,
+  // the others fade back in
+  const LINE_VIEWS = ['sketch', 'flathd', 'flathd2', 'cross', 'marker', 'density', 'particles', 'picasso'];
+  let bound = { c: [0, 0, 0], r: 100 };
+  let objCenter = null;   // centre of the object's box (parts + shape), mm
+  let densSmoke = 0;      // density: 1 while the view changes (smoke spreads), back to 0 as it condenses
+  let lastDt = 1 / 60;
+  let ptScatter = 0;      // particles: thrown about while the view changes, back in place after
+  const densJelly = [];   // density: each part's halo follows its projected box on a soft spring (a jelly blob)
+  let redrawSeen = params.redraw, redrawT = 1;
+  // flat hd: the pen strokes, traced from the g-buffer once per redraw
+  const STROKE_S = 2;   // device px per stroke cell
+  const strokeTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, strokeTex);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 1, 1, 0, gl.RED, gl.FLOAT, new Float32Array([0]));
+  let strokeW = 1, lastTraceW = 1, needTrace = false;
+  function redrawUniforms(u) {
+    const k = Math.min(1, redrawT / CONFIG.camera.redraw);
+    gl.uniform1f(u.uRedraw, redrawT >= CONFIG.camera.redraw ? 1 : 1 - Math.pow(1 - k, 2.2));
+    const [px, py] = view.project(bound.c[0], bound.c[1], bound.c[2]);
+    gl.uniform2f(u.uRedrawC, px * pxr(), size.h - py * pxr());
+    gl.uniform1f(u.uRedrawR, bound.r * 1.5 * view.scale * pxr());
+    if (u.uDrawT) gl.uniform1f(u.uDrawT, params.moving ? 0 : Math.min(1, redrawT / CONFIG.flatHd.redraw));
+  }
 
   // --- animated SDF parameters (mm) ---
   const geo = {
@@ -165,6 +249,8 @@ export function createBody(canvas) {
       canvas.style.width = view.vw + 'px';
       canvas.style.height = view.vh + 'px';
       gtarget.resize(w, h);
+      g2target.resize(w, h);
+      densA.resize(w, h); densB.resize(w, h); densFresh = true;
     }
     if (gw !== size.gw || gh !== size.gh) {
       target.resize(gw, gh);
@@ -175,8 +261,13 @@ export function createBody(canvas) {
   }
 
   function update(dt) {
-    frameTime += (dt - frameTime) * 0.1;
-    qualityClock += dt;
+    // the dynamic resolution holds still while a view is being redrawn: a resize mid-drawing
+    // reads as a jump (and the one heavy frame that traces the strokes must not count)
+    const redrawing = redrawT < CONFIG.flatHd.redraw + 0.4;
+    if (!redrawing) frameTime += (Math.min(dt, 0.05) - frameTime) * 0.1;
+    qualityClock = redrawing ? 0 : qualityClock + dt;
+    // cross / cross 2 / dots grid keep full resolution: their crisp marks blur into blobs when upscaled
+    if (crispView()) { quality = 1; qualityClock = 0; }
     if (qualityClock > 0.5) {
       qualityClock = 0;
       if (frameTime > 0.022 && quality > 0.5) quality = Math.max(0.5, +(quality - 0.1).toFixed(2));
@@ -210,6 +301,14 @@ export function createBody(canvas) {
     // cross-fade between views (~0.45 s)
     const approach = (v, goal) => v + Math.sign(goal - v) * Math.min(Math.abs(goal - v), dt / 0.45);
     for (const v of VIEWS) weight[v] = approach(weight[v], params.view === v ? 1 : 0);
+    if (params.redraw !== redrawSeen) { redrawSeen = params.redraw; redrawT = 0; needTrace = true; }
+    else redrawT += dt;
+    densSmoke = params.moving ? Math.min(1, densSmoke + dt / 0.3) : Math.max(0, densSmoke - dt / 0.35);
+    ptScatter = params.moving ? Math.min(1, ptScatter + dt / 0.25) : Math.max(0, ptScatter - dt / 0.6);
+    lastDt = dt;
+    if (redrawT > 1e4) redrawT = 1e4;
+    const fade = LINE_VIEWS.includes(params.view) ? 1 : Math.min(1, 0.15 + redrawT / (0.6 * CONFIG.camera.redraw));
+    canvas.style.opacity = fade.toFixed(3);
   }
 
   const color = hexToRgb(CONFIG.palette.dot);
@@ -230,7 +329,12 @@ export function createBody(canvas) {
     gl.uniform3fv(u.uCamFwd, c.fwd);
     gl.uniform1f(u.uFocal, view.focal() * pxr());
     gl.uniform2f(u.uCenterDev, view.cx * pxr(), size.h - view.cy * pxr());
-    gl.uniform3fv(u.uLight, CONFIG.light);
+    // lab · dots grid: the light can be moved (direction around the object, height), so the
+    // dots — which follow the light — show the surfaces differently
+    if (params.view === 'dots' && params.dotStyle === 'grid') {
+      const az = params.lightAz * Math.PI / 180, el = params.lightEl * Math.PI / 180;
+      gl.uniform3f(u.uLight, Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+    } else gl.uniform3fv(u.uLight, CONFIG.light);
 
     const W = CONFIG.wheel, S = CONFIG.screen;
     // case 2 has no wheels: they are parked far away, outside the bounds (never hit)
@@ -249,10 +353,12 @@ export function createBody(canvas) {
       kind: state.kind,
       screen: state.screenType,
       withScreen: state.withScreen,
+      screenSpot: state.screenSpot,
       speakerLib: state.speakerLib,
       power: state.power,
       shape: state.shape,
       totem: state.totem,
+      stretch: state.stretch, moves: state.moves, wheelD: state.wheelD, wheelSpread: state.wheelSpread,
       knobCount: state.extras.filter((e) => e.type === 'knob').length,
       wl: [geo.wlx.value, geo.wly.value],
       wr: [geo.wrx.value, geo.wry.value],
@@ -272,6 +378,15 @@ export function createBody(canvas) {
       partEnv[i] = L.parts[i].env;
     }
     gl.uniform1i(u.uPartCount, n);
+    // case 2 wheels (it moves): from the layout — position, axle depth, size
+    const WH = state.kind === 'speaker' ? L.wheels : null;
+    if (state.kind === 'speaker') {
+      gl.uniform2f(u.uWL, WH ? WH.l[0] : -1e4, WH ? WH.l[1] : -1e4);
+      gl.uniform2f(u.uWR, WH ? WH.r[0] : 1e4, WH ? WH.r[1] : -1e4);
+    }
+    gl.uniform1f(u.uWheelZ, WH ? WH.z : 0);
+    gl.uniform1f(u.uWheelScale, WH ? WH.scale : 1);
+    gl.uniform1f(u.uAxleIn, WH ? WH.axleIn : 0);
     if (u['uPartC[0]']) {
       gl.uniform3fv(u['uPartC[0]'], partC);
       gl.uniform3fv(u['uPartH[0]'], partH);
@@ -304,6 +419,8 @@ export function createBody(canvas) {
       gl.uniform1fv(u['uPrimRound[0]'], rnd);
     }
     layout = L;
+    const ST = L.stretch ?? { c: [0, 0], s: [1, 1] };
+    gl.uniform4f(u.uStretch, ST.c[0], ST.c[1], ST.s[0], ST.s[1]);
 
     // cables
     L.cables.forEach((cb, ci) => {
@@ -347,6 +464,7 @@ export function createBody(canvas) {
       grow([geo.wlx.value, geo.wly.value, 0], [16, 46, 46]);
       grow([geo.wrx.value, geo.wry.value, 0], [16, 46, 46]);
     }
+    if (WH) for (const w of [WH.l, WH.r]) grow([w[0], w[1], WH.z], [WH.hw + 1, WH.R + 1, WH.R + 1]);
     grow(L.neck.a, [L.neck.r, L.neck.r, L.neck.r]);
     for (const Pm of Ps) {
       // box half size, or the profile's circumradius
@@ -356,13 +474,18 @@ export function createBody(canvas) {
     }
     grow(L.chassis.a, [L.chassis.r, L.chassis.r, L.chassis.r]);
     grow(L.chassis.b, [L.chassis.r, L.chassis.r, L.chassis.r]);
+    // the stretched skin reaches further out, in x and y from the stretch centre
+    for (let k = 0; k < 2; k++) { lo[k] = ST.c[k] + (lo[k] - ST.c[k]) * ST.s[k]; hi[k] = ST.c[k] + (hi[k] - ST.c[k]) * ST.s[k]; }
     if (mx0 && state.kind === 'robot') grow([geo.sx.value, geo.sy.value, 0], [S.w / 2, S.h / 2 + 18, 20]); // matrix + frog eyes
     for (const e of extras) grow(e.p, [16, 16, 16]);                       // knob caps
+    objCenter = lo.map((v, k) => (v + hi[k]) / 2);   // the object itself (not the cable to the wall): the camera looks here
     for (const cb of L.cables) if (cb.kind === 'wall') for (const pt of cb.points) grow(pt, [3, 3, 3]); // the cable to the wall
     const margin = look.pad.value + params.breathe + params.reach + 4;
     const bc = lo.map((v, k) => (v + hi[k]) / 2);
+    const br = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2 + margin;
     gl.uniform3fv(u.uBoundC, bc);
-    gl.uniform1f(u.uBoundR, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2 + margin);
+    gl.uniform1f(u.uBoundR, br);
+    bound = { c: bc, r: br };
     // window in the skin over the LED matrix's LEDs
     const mx = L.parts.find((p) => p.key === 'matrix');
     if (mx) {
@@ -434,6 +557,7 @@ export function createBody(canvas) {
     gl.uniform1i(u.uMethod, METHODS[params.method] ?? 0);
     gl.uniform1i(u.uRings, params.rings ? 1 : 0);
     gl.uniform1f(u.uRingAmt, params.ringAmount);
+    gl.uniform1f(u.uEdgeFocus, params.edgeFocus);
     bindTex(0, blueTex, u.uBlue);
 
     gl.bindVertexArray(level.quad);
@@ -592,7 +716,16 @@ export function createBody(canvas) {
   });
 
   /** Flat view: coloured shapes for the parts, coloured contours, pencil cables. */
-  function renderFlat(alpha, sketch) {
+  function renderFlat(alpha, sketch, animate = false) {
+    if (animate) {
+      // flat hd 2: the flat g-buffer with face classes, for the corner lines (and the strokes)
+      gl.useProgram(flat2g.prog);
+      gl.uniform1f(flat2g.uniforms.uFaces, 1);
+      flat2Gbuffer();
+      gl.useProgram(flat2g.prog);
+      gl.uniform1f(flat2g.uniforms.uFaces, 0);
+      if (needTrace) traceNow();
+    }
     const u = flat.uniforms;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, size.w, size.h);
@@ -608,6 +741,12 @@ export function createBody(canvas) {
     gl.uniform1f(u.uBreathe, params.breathe);
     gl.uniform1f(u.uAlpha, alpha);
     gl.uniform1f(u.uSketch, sketch);
+    gl.uniform1f(u.uAnim, animate ? 1 : 0);
+    bindTex(0, gtarget.tex, u.uG);
+    gl.uniform1f(u.uLineW, Math.max(1, 1.1 * pxr()));
+    redrawUniforms(u);
+    bindTex(4, strokeTex, u.uStroke);
+    gl.uniform1f(u.uStrokeK, strokeW / Math.max(1, lastTraceW));
     const F = CONFIG.palette.flat;
     gl.uniform3fv(u.uFInk, hexToRgb(F.ink));
     gl.uniform3fv(u.uFRed, hexToRgb(F.red));
@@ -620,9 +759,9 @@ export function createBody(canvas) {
   }
 
   /** Flat 2: what is seen (ids + depths) into the g-buffer, then fills and clean lines. */
-  function flat2Gbuffer() {
+  function flat2Gbuffer(into = gtarget) {
     const u = flat2g.uniforms;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, gtarget.fbo);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, into.fbo);
     gl.viewport(0, 0, size.w, size.h);
     gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
@@ -773,6 +912,655 @@ export function createBody(canvas) {
     gl.uniform3fv(u.uHiInk, hexToRgb(E.hi));
     gl.uniform3fv(u.uPaper, hexToRgb(E.paper));
     gl.bindVertexArray(emptyE.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  /** Sketch: the shape as a stepped pencil drawing (silhouette + face creases), the parts high fidelity. */
+  function renderSketch(alpha) {
+    const cell = Math.max(6, CONFIG.sketch.cellMm * view.scale * pxr());
+    const mod = (a, b) => ((a % b) + b) % b;
+    const off = [mod(view.cx * pxr(), cell), mod(size.h - view.cy * pxr(), cell)];
+    const cols = Math.ceil(size.w / cell) + 2;
+    const rows = Math.ceil(size.h / cell) + 2;
+
+    // pass 1: one texel per cell, with the face it sees
+    let u = emptyC.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, gtarget.fbo);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.viewport(0, 0, cols, rows);
+    gl.useProgram(emptyC.prog);
+    gl.uniform1f(u.uTime, clock);
+    sceneUniforms(u);
+    const [mx, my] = view.toMm(mouse.x, mouse.y);
+    gl.uniform2f(u.uMouse, mx, my);
+    gl.uniform1f(u.uMouseAmt, Math.max(0, mouse.amt.value));
+    gl.uniform1f(u.uReach, params.reach);
+    gl.uniform1f(u.uBreathe, params.breathe);
+    gl.uniform1f(u.uCellPx, cell);
+    gl.uniform2f(u.uGridOff, off[0], off[1]);
+    gl.uniform1f(u.uNear, CONFIG.camera.distance - 320);
+    gl.uniform1f(u.uFar, CONFIG.camera.distance + 320);
+    gl.uniform1f(u.uFaces, 1);
+    gl.bindVertexArray(emptyC.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.uniform1f(u.uFaces, 0);   // the empty and pixel 3d views share this program
+
+    // pass 2: paper, pencil, and the real parts
+    u = sketch.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(sketch.prog);
+    gl.uniform1f(u.uTime, clock);
+    sceneUniforms(u);
+    bindTex(0, gtarget.tex, u.uG);
+    gl.uniform1f(u.uAlpha, alpha);
+    gl.uniform1f(u.uCellPx, cell);
+    gl.uniform2f(u.uGridOff, off[0], off[1]);
+    gl.uniform1f(u.uLineW, Math.max(1, 1.25 * pxr()));
+    redrawUniforms(u);
+    const S = CONFIG.palette.sketch;
+    gl.uniform3fv(u.uInk, hexToRgb(S.ink));
+    gl.uniform3fv(u.uSoftInk, hexToRgb(S.soft));
+    gl.uniform3fv(u.uHiInk, hexToRgb(S.hi));
+    gl.uniform3fv(u.uPaper, hexToRgb(S.paper));
+    gl.bindVertexArray(sketch.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  /**
+   * The camera has just cut to a new view: read the flat g-buffer (already rendered into
+   * gtarget) back and trace its lines into pen strokes (strokes.js).
+   * flat hd: profile, then the corners · flat hd 2: the profile only.
+   */
+  function traceNow() {
+    needTrace = false;
+    const px = new Uint8Array(size.w * size.h * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, gtarget.fbo);
+    gl.readPixels(0, 0, size.w, size.h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    const win = { sil: [0.16, 0.62], crease: [0.52, 0.86], rest: 0.9 };   // profile, then the corners (flat hd and flat hd 2)
+    const st = traceStrokes(px, size.w, size.h, STROKE_S, win);
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, strokeTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, st.tw, st.th, 0, gl.RED, gl.FLOAT, st.data);
+    strokeW = st.tw;
+    lastTraceW = size.w;
+  }
+
+  /** Flat hd: flat 1's clean lines with face tints and creases, the parts high fidelity. */
+  function renderFlatHd(alpha, creases = false) {
+    flat2g.uniforms;   // make sure the program exists before setting uFaces
+    gl.useProgram(flat2g.prog);
+    gl.uniform1f(flat2g.uniforms.uFaces, 1);
+    flat2Gbuffer();
+    gl.useProgram(flat2g.prog);
+    gl.uniform1f(flat2g.uniforms.uFaces, 0);   // flat 1 / orbital share this program
+    if (needTrace) traceNow();
+    const u = flathd.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(flathd.prog);
+    gl.uniform1f(u.uTime, clock);
+    sceneUniforms(u);
+    bindTex(0, gtarget.tex, u.uG);
+    gl.uniform1f(u.uAlpha, alpha);
+    gl.uniform1f(u.uLineW, Math.max(1, 1.1 * pxr()));
+    redrawUniforms(u);
+    bindTex(4, strokeTex, u.uStroke);
+    gl.uniform1f(u.uStrokeK, strokeW / Math.max(1, lastTraceW));
+    const F = CONFIG.palette.flat;
+    gl.uniform3fv(u.uFInk, hexToRgb(F.ink));
+    gl.uniform3fv(u.uFRed, hexToRgb(F.red));
+    gl.uniform3fv(u.uFBlue, hexToRgb(F.blue));
+    gl.uniform3fv(u.uFGreen, hexToRgb(F.green));
+    gl.uniform3fv(u.uFill, hexToRgb(CONFIG.palette.flatHdFill));
+    gl.uniform3fv(u.uLine, hexToRgb(CONFIG.palette.flatHdLine));
+    gl.uniform1f(u.uCreases, creases ? 1 : 0);
+    gl.bindVertexArray(flathd.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  /** Milk: a solid milky silicone body, the parts inside in their own clear colours. */
+  const milkColors = new Float32Array(13 * 3);
+  for (const k in LIBRARY) if (CONFIG.milk.parts[k]) milkColors.set(hexToRgb(CONFIG.milk.parts[k]), LIBRARY[k].type * 3);
+  function renderMilk(alpha) {
+    const u = milk.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(milk.prog);
+    gl.uniform1f(u.uTime, clock);
+    sceneUniforms(u);
+    const [mx, my] = view.toMm(mouse.x, mouse.y);
+    gl.uniform2f(u.uMouse, mx, my);
+    gl.uniform1f(u.uMouseAmt, Math.max(0, mouse.amt.value));
+    gl.uniform1f(u.uReach, params.reach);
+    gl.uniform1f(u.uBreathe, params.breathe);
+    gl.uniform1f(u.uAlpha, alpha);
+    const M = CONFIG.milk;
+    gl.uniform3fv(u.uMilk, hexToRgb(M.skin));
+    gl.uniform3fv(u.uMilkShade, hexToRgb(M.shade));
+    gl.uniform1f(u.uVeil, M.veil);
+    if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], milkColors);
+    gl.bindVertexArray(milk.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  /** Live (2D): a point cloud that gathers on the outlines, on black. */
+  function renderLive(alpha) {
+    const cell = Math.max(3, CONFIG.live.cellPx * pxr());
+    const mod = (a, b) => ((a % b) + b) % b;
+    const off = [mod(view.cx * pxr(), cell), mod(size.h - view.cy * pxr(), cell)];
+    const cols = Math.ceil(size.w / cell) + 2;
+    const rows = Math.ceil(size.h / cell) + 2;
+
+    // pass 1: what covers each cell
+    let u = emptyC.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, gtarget.fbo);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.viewport(0, 0, cols, rows);
+    gl.useProgram(emptyC.prog);
+    gl.uniform1f(u.uTime, clock);
+    sceneUniforms(u);
+    const [mx, my] = view.toMm(mouse.x, mouse.y);
+    gl.uniform2f(u.uMouse, mx, my);
+    gl.uniform1f(u.uMouseAmt, Math.max(0, mouse.amt.value));
+    gl.uniform1f(u.uReach, params.reach);
+    gl.uniform1f(u.uBreathe, params.breathe);
+    gl.uniform1f(u.uCellPx, cell);
+    gl.uniform2f(u.uGridOff, off[0], off[1]);
+    gl.uniform1f(u.uNear, CONFIG.camera.distance - 320);
+    gl.uniform1f(u.uFar, CONFIG.camera.distance + 320);
+    gl.uniform1f(u.uFaces, 1);
+    gl.bindVertexArray(emptyC.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.uniform1f(u.uFaces, 0);
+
+    // pass 2: closeness to the outlines, per cell (the g-buffer is read with the same +1 offset)
+    const key = `${cols}x${rows}`;
+    if (key !== liveSize) { liveTarget.resize(cols, rows); liveSize = key; }
+    u = liveE.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, liveTarget.fbo);
+    gl.viewport(0, 0, cols, rows);
+    gl.useProgram(liveE.prog);
+    bindTex(0, gtarget.tex, u.uG);
+    gl.uniform1i(u.uZero, 0);
+    gl.bindVertexArray(liveE.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    // pass 3: full-res g-buffer for the profile line and where the parts are
+    flat2Gbuffer();
+
+    // pass 4: the points, the parts, the profile
+    u = liveD.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(liveD.prog);
+    sceneUniforms(u);
+    bindTex(0, liveTarget.tex, u.uE);
+    bindTex(1, gtarget.tex, u.uG);
+    gl.uniform1f(u.uLineW, Math.max(1, 1.2 * pxr()));
+    gl.uniform3fv(u.uLineCol, hexToRgb(CONFIG.live.line));
+    gl.uniform1f(u.uAlpha, alpha);
+    gl.uniform1f(u.uCellPx, cell);
+    gl.uniform2f(u.uGridOff, off[0], off[1]);
+    gl.uniform1f(u.uTime, clock);
+    gl.uniform1f(u.uDotPx, CONFIG.live.dotPx * pxr());
+    gl.uniform3fv(u.uSkinCol, hexToRgb(CONFIG.live.skin));
+    gl.bindVertexArray(liveD.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  const markerColors = new Float32Array(13 * 3);
+  for (const k in LIBRARY) if (CONFIG.marker.parts[k]) markerColors.set(hexToRgb(CONFIG.marker.parts[k]), LIBRARY[k].type * 3);
+  /** Marker: flat felt-pen fills per face, stepped wobbly edges, streaks; parts high fidelity. */
+  function renderMarker(alpha) {
+    const cell = Math.max(1.5, CONFIG.marker.cellPx * pxr());
+    const mod = (a, b) => ((a % b) + b) % b;
+    const off = [mod(view.cx * pxr(), cell), mod(size.h - view.cy * pxr(), cell)];
+    const cols = Math.ceil(size.w / cell) + 2;
+    const rows = Math.ceil(size.h / cell) + 2;
+    let u = emptyC.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, gtarget.fbo);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.viewport(0, 0, cols, rows);
+    gl.useProgram(emptyC.prog);
+    gl.uniform1f(u.uTime, clock);
+    sceneUniforms(u);
+    const [mx, my] = view.toMm(mouse.x, mouse.y);
+    gl.uniform2f(u.uMouse, mx, my);
+    gl.uniform1f(u.uMouseAmt, Math.max(0, mouse.amt.value));
+    gl.uniform1f(u.uReach, params.reach);
+    gl.uniform1f(u.uBreathe, params.breathe);
+    gl.uniform1f(u.uCellPx, cell);
+    gl.uniform2f(u.uGridOff, off[0], off[1]);
+    gl.uniform1f(u.uNear, CONFIG.camera.distance - 320);
+    gl.uniform1f(u.uFar, CONFIG.camera.distance + 320);
+    gl.uniform1f(u.uFaces, 1);
+    gl.bindVertexArray(emptyC.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.uniform1f(u.uFaces, 0);
+
+    u = markerV.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(markerV.prog);
+    gl.uniform1f(u.uTime, clock);
+    sceneUniforms(u);
+    bindTex(0, gtarget.tex, u.uG);
+    gl.uniform1f(u.uAlpha, alpha);
+    gl.uniform1f(u.uCellPx, cell);
+    gl.uniform2f(u.uGridOff, off[0], off[1]);
+    redrawUniforms(u);
+    gl.uniform1f(u.uDrawT, params.moving ? 0 : Math.min(1, redrawT / CONFIG.marker.redraw));
+    // the parts wobble: clearly while they move and while the shape forms, barely at rest
+    const mt = Math.min(1, redrawT / CONFIG.marker.redraw);
+    gl.uniform1f(u.uWobble, (params.moving ? 2.6 : 0.5 + 2.1 * (1 - mt)) * pxr());
+    const M = CONFIG.marker;
+    gl.uniform3fv(u.uFront, hexToRgb(M.front));
+    gl.uniform3fv(u.uSide, hexToRgb(M.side));
+    gl.uniform3fv(u.uTop, hexToRgb(M.top));
+    gl.uniform3fv(u.uBack, hexToRgb(M.back));
+    if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], markerColors);
+    gl.bindVertexArray(markerV.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  /** Density: the parts' projected boxes as soft halos, summed and cut into flat bands. */
+  const rectData = new Float32Array(12 * 4), rectW = new Float32Array(12);
+  const jellyOff = [0, 0];
+  function renderDensity(alpha) {
+    const L = layout;
+    let n = 0;
+    jellyOff[0] = 0; jellyOff[1] = 0;
+    if (L) for (const part of L.parts) {
+      if (n >= 12) break;
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      const R = part.R, h = part.h;
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+        const p = [0, 1, 2].map((k) => part.c[k] + sx * h[0] * R[k] + sy * h[1] * R[3 + k] + sz * h[2] * R[6 + k]);
+        const [x, y] = view.project(p[0], p[1], p[2]);
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      }
+      const r = pxr();
+      // the halo lags behind its part on an underdamped spring: the blob trails, overshoots, settles
+      const goal = [(x0 + x1) / 2 * r, size.h - (y0 + y1) / 2 * r, (x1 - x0) / 2 * r * 0.6, (y1 - y0) / 2 * r * 0.6];
+      const J = densJelly[n] ??= { v: goal.slice(), vel: [0, 0, 0, 0] };
+      const w = 2 * Math.PI * (1.5 + 0.2 * (n % 4)), z = 0.55;        // each part its own, soft wobble
+      const steps = Math.max(1, Math.ceil(lastDt / (1 / 120))), hdt = Math.min(lastDt, 0.1) / steps;
+      for (let s = 0; s < steps; s++) for (let k = 0; k < 4; k++) {
+        J.vel[k] += (w * w * (goal[k] - J.v[k]) - 2 * z * w * J.vel[k]) * hdt;
+        J.v[k] += J.vel[k] * hdt;
+      }
+      if (Math.abs(goal[0] - J.v[0]) > size.w) J.v = goal.slice();   // (first frame / resize: no fly-in)
+      rectData.set(J.v, n * 4);
+      jellyOff[0] += J.v[0] - goal[0]; jellyOff[1] += J.v[1] - goal[1];
+      rectW[n] = 0.6 + Math.min(1.2, (h[0] * h[1] * h[2]) / 8000);
+      n++;
+    }
+    flat2Gbuffer(g2target);   // which part is seen where: for the white outlines
+    // the shape, one texel per small cell (with faces), for the blurred silhouette
+    const cell = Math.max(3, 3 * pxr());
+    const mod = (a, b) => ((a % b) + b) % b;
+    const off = [mod(view.cx * pxr(), cell), mod(size.h - view.cy * pxr(), cell)];
+    let ue = emptyC.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, gtarget.fbo);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.viewport(0, 0, Math.ceil(size.w / cell) + 2, Math.ceil(size.h / cell) + 2);
+    gl.useProgram(emptyC.prog);
+    gl.uniform1f(ue.uTime, clock);
+    sceneUniforms(ue);
+    gl.uniform1f(ue.uBreathe, params.breathe * Math.min(2, params.densMotion * 2.5));   // the surface breathes with the motion slider (still at 0)
+    gl.uniform1f(ue.uCellPx, cell);
+    gl.uniform2f(ue.uGridOff, off[0], off[1]);
+    gl.uniform1f(ue.uNear, CONFIG.camera.distance - 320);
+    gl.uniform1f(ue.uFar, CONFIG.camera.distance + 320);
+    gl.uniform1f(ue.uFaces, 1);
+    gl.bindVertexArray(emptyC.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.uniform1f(ue.uFaces, 0);
+
+    const u = densV.uniforms;
+    // pass 0: the field, flowing from last frame's (densA) into densB
+    gl.bindFramebuffer(gl.FRAMEBUFFER, densB.fbo);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.disable(gl.BLEND);
+    gl.useProgram(densV.prog);
+    gl.uniform1f(u.uTime, clock);
+    sceneUniforms(u);
+    gl.uniform1f(u.uAlpha, alpha);
+    if (u['uRect[0]']) gl.uniform4fv(u['uRect[0]'], rectData);
+    if (u['uRectW[0]']) gl.uniform1fv(u['uRectW[0]'], rectW);
+    const D = CONFIG.density;
+    gl.uniform1i(u.uRectN, n);
+    gl.uniform2f(u.uJelly, n ? jellyOff[0] / n : 0, n ? jellyOff[1] / n : 0);   // the shape's blur follows the blob's mean lag
+    bindTex(0, gtarget.tex, u.uG);
+    bindTex(1, g2target.tex, u.uP);
+    gl.uniform1f(u.uLineW, Math.max(1, 1.2 * pxr()));
+    gl.uniform3fv(u.uLineCol, hexToRgb(D.line));
+    gl.uniform1i(u.uShowSil, params.densLines.object ? 1 : 0);
+    gl.uniform1i(u.uShowParts, params.densLines.parts ? 1 : 0);
+    gl.uniform1f(u.uCellPx, cell);
+    gl.uniform2f(u.uGridOff, off[0], off[1]);
+    // the transition: the smoke spreads out (wider halo, fewer bands, more haze), then condenses back
+    const sm = densSmoke * densSmoke * (3 - 2 * densSmoke);
+    gl.uniform1f(u.uSigma, D.spreadMm * (1 + 0.3 * sm) * view.scale * pxr());
+    gl.uniform1f(u.uHaze, 0.3 + 0.35 * sm);
+    gl.uniform1f(u.uMotion, params.densMotion);
+    const ramp = D.palettes[D.palette % D.palettes.length];
+    if (u['uRamp[0]']) gl.uniform3fv(u['uRamp[0]'], new Float32Array(ramp.flatMap(hexToRgb)));
+    gl.uniform1f(u.uLevels, (ramp.length - 1) * (1 - 0.2 * sm));
+    gl.uniform1i(u.uPass, 0);
+    bindTex(2, densA.tex, u.uPrev);
+    // memory: settles fast at rest, flows slowly (liquid) while the view changes
+    const rate = params.moving ? 3.2 : 16;   // flows while the view changes, settles quickly once it has arrived
+    gl.uniform1f(u.uK, densFresh ? 1 : 1 - Math.exp(-rate * lastDt));
+    densFresh = false;
+    gl.bindVertexArray(densV.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    [densA, densB] = [densB, densA];
+    // pass 1: bands, outlines
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform1i(u.uPass, 1);
+    bindTex(2, densA.tex, u.uPrev);
+    gl.bindVertexArray(densV.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  /** Particles: a clean, still dot grid inside the shape, a 2D outline, parts as outlines. */
+  function renderParticles(alpha) {
+    const P = CONFIG.particles;
+    flat2Gbuffer(g2target);
+    const cell = Math.max(4, P.cellPx * pxr());
+    const mod = (a, b) => ((a % b) + b) % b;
+    const off = [mod(view.cx * pxr(), cell), mod(size.h - view.cy * pxr(), cell)];
+    let u = emptyC.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, gtarget.fbo);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.viewport(0, 0, Math.ceil(size.w / cell) + 2, Math.ceil(size.h / cell) + 2);
+    gl.useProgram(emptyC.prog);
+    gl.uniform1f(u.uTime, clock);
+    sceneUniforms(u);
+    gl.uniform1f(u.uBreathe, 0);
+    gl.uniform1f(u.uCellPx, cell);
+    gl.uniform2f(u.uGridOff, off[0], off[1]);
+    gl.uniform1f(u.uNear, CONFIG.camera.distance - 320);
+    gl.uniform1f(u.uFar, CONFIG.camera.distance + 320);
+    gl.bindVertexArray(emptyC.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    u = partV.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(partV.prog);
+    bindTex(0, gtarget.tex, u.uG);
+    bindTex(1, g2target.tex, u.uP);
+    gl.uniform1f(u.uAlpha, alpha);
+    gl.uniform1f(u.uCellPx, cell);
+    gl.uniform2f(u.uGridOff, off[0], off[1]);
+    gl.uniform1f(u.uFill, P.fill);
+    gl.uniform1f(u.uPartFill, P.partFill);
+    gl.uniform1f(u.uRingFrac, P.rings);
+    gl.uniform1f(u.uDotR, P.dotR);
+    gl.uniform1f(u.uLineW, Math.max(1, 1.0 * pxr()));
+    gl.uniform3fv(u.uInk, hexToRgb(P.ink));
+    gl.uniform3fv(u.uLineCol, hexToRgb(P.line));
+    gl.uniform3fv(u.uPartLine, hexToRgb(P.partLine));
+    gl.bindVertexArray(partV.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  /** Picasso: one brush contour, construction lines, lithographic black parts, a ground stroke. */
+  function renderPicasso(alpha) {
+    gl.useProgram(flat2g.prog);
+    gl.uniform1f(flat2g.uniforms.uFaces, 1);
+    flat2Gbuffer();
+    gl.useProgram(flat2g.prog);
+    gl.uniform1f(flat2g.uniforms.uFaces, 0);
+    if (needTrace) traceNow();
+    const u = picV.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(picV.prog);
+    bindTex(0, gtarget.tex, u.uG);
+    bindTex(4, strokeTex, u.uStroke);
+    gl.uniform1f(u.uStrokeK, strokeW / Math.max(1, lastTraceW));
+    gl.uniform1f(u.uDrawT, params.moving ? 0 : Math.min(1, redrawT / CONFIG.flatHd.redraw));
+    gl.uniform1f(u.uAlpha, alpha);
+    gl.uniform1f(u.uLineW, Math.max(1.2, 1.5 * pxr()));
+    gl.uniform3fv(u.uInk, hexToRgb(CONFIG.picasso.ink));
+    // the ground stroke: under the object's box, a little wider than it
+    const oc = objCenter || bound.c, r = bound.r;
+    const [gx, cyS] = view.project(oc[0], oc[1], oc[2]);
+    const gy = cyS + r * 0.74 * view.scale;                  // just below the object as seen (any view)
+    const half = r * 0.95 * view.scale;
+    gl.uniform4f(u.uGround, (gx - half) * pxr(), (gx + half) * pxr(), size.h - gy * pxr(), 3.2 * pxr());
+    gl.bindVertexArray(picV.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  /** Overlay layers (lab · dots grid): object outline, part outlines, hi-fi parts. */
+  function renderOverlay(alpha, G) {
+    flat2Gbuffer(g2target);
+    const u = overV.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(overV.prog);
+    gl.uniform1f(u.uTime, clock);
+    sceneUniforms(u);
+    bindTex(1, g2target.tex, u.uP);
+    gl.uniform1f(u.uAlpha, alpha);
+    gl.uniform1f(u.uLineW, Math.max(0.6, (G.lineW ?? 1) * pxr()));
+    gl.uniform3fv(u.uLineCol, hexToRgb(CONFIG.palette.dot));
+    gl.uniform1i(u.uShowSil, G.outline ? 1 : 0);
+    gl.uniform1i(u.uShowPartLines, G.lines ? 1 : 0);
+    gl.uniform1i(u.uShowParts, G.hifi ? 1 : 0);
+    gl.bindVertexArray(overV.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  /** Cross: rounded cell islands, one tone per face, on a grid of crosses; parts high fidelity. */
+  function renderCross(alpha, pattern = true) {
+    // cross: whole cells · cross 2: smooth (one 'cell' per device px), no pattern
+    const cell = pattern ? Math.max(4, (params.crossCellMm ?? CONFIG.cross.cellMm) * view.scale * pxr()) : 1;   // the detail slider
+    const mod = (a, b) => ((a % b) + b) % b;
+    const off = [mod(view.cx * pxr(), cell), mod(size.h - view.cy * pxr(), cell)];
+    const cols = Math.ceil(size.w / cell) + 2;
+    const rows = Math.ceil(size.h / cell) + 2;
+    let u = emptyC.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, gtarget.fbo);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.disable(gl.BLEND);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.viewport(0, 0, cols, rows);
+    gl.useProgram(emptyC.prog);
+    gl.uniform1f(u.uTime, clock);
+    sceneUniforms(u);
+    const [mx, my] = view.toMm(mouse.x, mouse.y);
+    gl.uniform2f(u.uMouse, mx, my);
+    gl.uniform1f(u.uMouseAmt, Math.max(0, mouse.amt.value));
+    gl.uniform1f(u.uReach, params.reach);
+    gl.uniform1f(u.uBreathe, params.shimmer ?? params.breathe);   // the shimmer slider
+    gl.uniform1f(u.uCellPx, cell);
+    gl.uniform2f(u.uGridOff, off[0], off[1]);
+    gl.uniform1f(u.uNear, CONFIG.camera.distance - 320);
+    gl.uniform1f(u.uFar, CONFIG.camera.distance + 320);
+    gl.uniform1f(u.uFaces, 1);
+    // conservative: a cell counts as 'near a part' within ~one cell (mm) of it, cables included
+    gl.uniform1f(u.uPartEps, Math.max(1.5, 0.75 * cell / (view.scale * pxr())));
+    gl.bindVertexArray(emptyC.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.uniform1f(u.uFaces, 0);
+    gl.uniform1f(u.uPartEps, 0);   // (the program is shared with other views)
+
+    // pass 2: the hifi layer — only when what it shows has changed (it is by far the heaviest pass)
+    const X = params.look === 1 ? { ...CONFIG.cross, ...CONFIG.cross.lookA } : CONFIG.cross;   // look a: warm greys
+    const pstyle = Math.max(0, ['colour', 'grey', 'flat', 'vector', 'line', 'boxes', 'flathd2', 'outline', 'gridline', 'dots', 'crosses', 'flat1'].indexOf(params.partStyle || 'colour'));
+    const outerWanted = pattern && (params.outsideOpacity ?? 0) > 0.01 && !params.moving;   // the outside only at rest
+    // the program for it — compiled in the background: until it is ready (this can take ~40 s on
+    // ANGLE / D3D the first time), draw with one that is, instead of freezing the page
+    const vName = pstyle === 5 && crossHv.boxes.ready() ? 'boxes' : 'parts';
+    if (pstyle === 5) crossHv.boxes.warm();
+    if (outerWanted) crossHv.outer.warm();
+    const outerOn = outerWanted && crossHv.outer.ready();
+    const hs = params.moving || params.outT > 0 ? CONFIG.cross.movingRes : 1;   // while the camera moves: the parts at low resolution (much cheaper)
+    const hw = Math.ceil(size.w * hs), hh = Math.ceil(size.h * hs);
+    // the loose voxels shown while the object turns (eased in / out)
+    crossGhost += ((params.moving || params.outT > 0 ? 1 : 0) - crossGhost) * Math.min(1, lastDt * (params.moving ? 10 : 6));
+    // rounded well below a pixel: the springs and the camera ease forever by ever smaller amounts
+    const cam = view.cam, mm = (v) => Math.round(v * 20), dir = (v) => Math.round(v * 1e4);
+    const J = (o) => JSON.stringify(o, (k, v) => (typeof v === 'number' ? mm(v) : v));
+    const key = [size.w, size.h, Math.round(view.focal() * pxr() * 10), Math.round(view.cx * 10), Math.round(view.cy * 10), ...cam.pos.map(mm), ...cam.right.map(dir), ...cam.up.map(dir)].join(',')
+      + '|' + J(extras) + '|' + J(layout?.parts?.map((q) => q.c)) + '|' + J(layout?.stretch) + '|' + J(layout?.prims) + '|' + J(layout?.cables?.map((q) => q.points))
+      + '|' + vName + pstyle + outerOn + hs + params.look + params.highlight + state.speakerPattern + state.leds.join('');
+    crossHifi.resize(size.w, size.h);
+    if (key !== crossHifi.key) {
+      crossHifi.key = key;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, crossHifi.fbo);
+      gl.viewport(0, 0, hw, hh);
+      gl.disable(gl.BLEND);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clearDepth(1);
+      gl.depthMask(true);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      // only where the object can be: the projected box of its bounding sphere
+      const pr = bound.c.map((v) => v);
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (let i = 0; i < 8; i++) {
+        const [px, py] = view.project(pr[0] + (i & 1 ? 1 : -1) * bound.r, pr[1] + (i & 2 ? 1 : -1) * bound.r, pr[2] + (i & 4 ? 1 : -1) * bound.r);
+        x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+      }
+      const sx0 = Math.max(0, Math.floor(x0 * pxr() * hs)), sx1 = Math.min(hw, Math.ceil(x1 * pxr() * hs));
+      const sy0 = Math.max(0, Math.floor((size.h - y1 * pxr()) * hs)), sy1 = Math.min(hh, Math.ceil((size.h - y0 * pxr()) * hs));
+      if (sx1 > sx0 && sy1 > sy0) {
+        gl.enable(gl.SCISSOR_TEST);
+        gl.scissor(sx0, sy0, sx1 - sx0, sy1 - sy0);
+        // the mask (depth only): near a part, or on the skin when the outside is drawn
+        gl.enable(gl.DEPTH_TEST);
+        gl.depthFunc(gl.ALWAYS);
+        gl.colorMask(false, false, false, false);
+        let um = crossM.uniforms;
+        gl.useProgram(crossM.prog);
+        bindTex(4, gtarget.tex, um.uG);
+        gl.uniform1f(um.uCellPx, cell * hs);
+        gl.uniform2f(um.uGridOff, off[0] * hs, off[1] * hs);
+        gl.uniform1f(um.uSkin, outerOn ? 1 : 0);
+        gl.bindVertexArray(crossM.quad);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.colorMask(true, true, true, true);
+        gl.depthMask(false);
+        gl.depthFunc(gl.GREATER);   // the quad sits at depth 0.5: only where the mask wrote 0
+        const drawHifi = (crossH) => {
+          u = crossH.uniforms;
+          gl.useProgram(crossH.prog);
+          gl.uniform1f(u.uTime, clock);
+          sceneUniforms(u);
+          gl.uniform1f(u.uFocal, view.focal() * pxr() * hs);
+          gl.uniform2f(u.uCenterDev, view.cx * pxr() * hs, (size.h - view.cy * pxr()) * hs);
+          gl.uniform2f(u.uMouse, 0, 0);       // the outside is drawn at rest (no lean, no breathing)
+          gl.uniform1f(u.uMouseAmt, 0);
+          gl.uniform1f(u.uBreathe, 0);
+          gl.uniform1i(u.uPartStyle, pstyle);
+          gl.uniform3fv(u.uPartTint, X.tint ?? [1, 1, 1]);
+          gl.uniform1f(u.uOuterOn, outerOn ? 1 : 0);
+          gl.uniform1i(u.uSteps, 110);
+          bindTex(4, gtarget.tex, u.uG);
+          gl.uniform1f(u.uCellPx, cell * hs);
+          gl.uniform2f(u.uGridOff, off[0] * hs, off[1] * hs);
+          gl.uniform2f(u.uCellRange, CONFIG.camera.distance - 320, CONFIG.camera.distance + 320);
+          if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], typeColors);
+          const camD = Math.hypot(...[0, 1, 2].map((k) => cam.pos[k] - bound.c[k]));
+          gl.uniform2f(u.uDepthRange, camD - bound.r, camD + bound.r);
+          gl.bindVertexArray(crossH.quad);
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+        };
+        drawHifi(crossHv[vName]);
+        if (outerOn) {
+          // the outside: its own small program, into the outer target only (over the screen's face)
+          gl.drawBuffers([gl.NONE, gl.COLOR_ATTACHMENT1, gl.NONE]);
+          drawHifi(crossHv.outer);
+          gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+        }
+        gl.disable(gl.SCISSOR_TEST);
+        gl.disable(gl.DEPTH_TEST);
+        gl.depthMask(true);
+        gl.depthFunc(gl.LESS);
+      }
+    }
+
+    // pass 3: cells + marks + the hifi layer (cheap, every frame)
+    u = crossV.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(crossV.prog);
+    bindTex(0, gtarget.tex, u.uG);
+    bindTex(1, crossHifi.parts, u.uParts);
+    bindTex(2, crossHifi.outer, u.uOuterTex);
+    bindTex(3, crossHifi.meta, u.uMeta);
+    gl.uniform1f(u.uAlpha, alpha);
+    gl.uniform1f(u.uCellPx, cell);
+    gl.uniform2f(u.uGridOff, off[0], off[1]);
+    gl.uniform1f(u.uOuter, outerOn ? params.outsideOpacity : 0);   // the outside slider
+    gl.uniform1f(u.uInside, pattern ? params.insideOpacity ?? 1 : 1);   // the inside slider
+    gl.uniform1f(u.uHifiScale, hs);
+    gl.uniform1f(u.uGhost, pattern ? crossGhost : 0);
+    gl.uniform1f(u.uFrost, params.frost ?? 0);
+    gl.uniform1f(u.uFrostFollow, params.frostFollow ? 1 : 0);
+    gl.uniform1f(u.uVoxAmt, params.voxels ?? 0.2);
+    gl.uniform1f(u.uVoxShimmer, params.voxShimmer ?? 0.2);
+    gl.uniform1f(u.uTime, clock);
+    gl.uniform3fv(u.uLightFill, hexToRgb(X.light));
+    gl.uniform3fv(u.uTopFill, hexToRgb(X.top));
+    gl.uniform3fv(u.uSideFill, hexToRgb(X.side));
+    gl.uniform3fv(u.uWheelFill, hexToRgb(X.wheel));
+    gl.uniform3fv(u.uDotCol, hexToRgb(X.dot));
+    gl.uniform3fv(u.uPageDot, hexToRgb(X.pageDot));
+    gl.uniform1f(u.uPattern, pattern ? 1 : 0);
+    gl.uniform1i(u.uPartStyle, pstyle);
+    if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], typeColors);   // the flat hd 2 colours
+    if (u['uPartType[0]']) gl.uniform1iv(u['uPartType[0]'], partType);
+    gl.uniform3fv(u.uPartCell, hexToRgb(X.partCell));
+    gl.uniform1i(u.uMark, ['dot', 'cross', 'ring', 'bracket'].indexOf(params.snapStyle || 'dot'));
+    redrawUniforms(u);
+    gl.uniform1f(u.uDrawT, !pattern ? 1 : params.moving ? 0 : Math.min(1, redrawT / CONFIG.cross.redraw));   // cross builds up cell by cell
+    gl.uniform1f(u.uOutT, pattern ? params.outT || 0 : 0);   // …and leaves cell by cell
+    gl.uniform1i(u.uAnim, Math.max(0, ['scatter', 'wipe', 'ripple', 'cut', 'pop', 'flicker'].indexOf(params.crossAnim || 'scatter')));
+    gl.bindVertexArray(crossV.quad);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
@@ -963,6 +1751,8 @@ export function createBody(canvas) {
         renderLevels();
         renderEase();
         renderDots(weight.dots);
+        const G = params.gridShow;   // lab · dots grid: optional object / part outlines, hi-fi parts
+        if (G.outline || G.lines || G.hifi) renderOverlay(weight.dots, G);
       }
     }
     if (weight.blocks > 0.01) renderLines(weight.blocks);
@@ -974,6 +1764,17 @@ export function createBody(canvas) {
     if (weight.pixel3d > 0.01) renderPixel3d(weight.pixel3d);
     if (weight.glass > 0.01) renderGlass(weight.glass);
     if (weight.empty > 0.01) renderEmpty(weight.empty);
+    if (weight.sketch > 0.01) renderSketch(weight.sketch);
+    if (weight.flathd > 0.01) renderFlatHd(weight.flathd, true);              // with the corners
+    if (weight.flathd2 > 0.01) renderFlat(weight.flathd2, 1, true);          // the old 'flat 2', drawing itself in
+    if (weight.milk > 0.01) renderMilk(weight.milk);
+    if (weight.live > 0.01) renderLive(weight.live);
+    if (weight.cross > 0.01) renderCross(weight.cross);
+    if (weight.cross2 > 0.01) renderCross(weight.cross2, false);   // only the snap points (SVG dots)
+    if (weight.marker > 0.01) renderMarker(weight.marker);
+    if (weight.density > 0.01) renderDensity(weight.density);
+    if (weight.particles > 0.01) renderParticles(weight.particles);
+    if (weight.picasso > 0.01) renderPicasso(weight.picasso);
     if (weight.blob > 0.01) renderBlob(weight.blob);
   }
 
@@ -986,6 +1787,19 @@ export function createBody(canvas) {
       mouse.y = y;
       mouse.inside = inside;
     },
+    /** The cross view's dot grid in CSS px: centre of cell (i, j) = off + (i + 0.5, j + 0.5) · cell (y down). */
+    dotGrid() {
+      const r = pxr();
+      const cell = Math.max(4, (params.crossCellMm ?? CONFIG.cross.cellMm) * view.scale * r);
+      const mod = (a, b) => ((a % b) + b) % b;
+      const ox = mod(view.cx * r, cell), oyGl = mod(size.h - view.cy * r, cell);
+      // flip the GL rows to CSS: a centre at GL y = oyGl + (j + .5)·cell sits at CSS y = (h − that) / r
+      return { cell: cell / r, ox: ox / r, oyTop: mod(size.h - oyGl, cell) / r };
+    },
+    /** Bounding sphere of the object (mm): { c, r }. */
+    bounds: () => bound,
+    /** Centre of the object's box in mm (null before the first frame). */
+    center: () => objCenter,
     /** The part layout used for the last frame (parts, cables). */
     layout: () => layout,
     /** Add-on poses for this frame: [{ type, p, n, scale, angle }]. */

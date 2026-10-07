@@ -15,8 +15,11 @@ for f in (root / 'src').rglob('*.js'):
     if t != s:
         f.write_bytes(t.encode('utf-8'))
 
-idx = root / 'index.html'
-s = idx.read_bytes().decode('utf-8')
-s = re.sub(r'(src/(?:style\.css|main\.js))(?:\?v=\w+)?', rf'\1?v={v}', s)
-idx.write_bytes(s.encode('utf-8'))
+for name in ('index.html', 'lab.html', 'cross.html'):
+    idx = root / name
+    if not idx.exists():
+        continue
+    s = idx.read_bytes().decode('utf-8')
+    s = re.sub(r'(src/(?:style\.css|main\.js))(?:\?v=\w+)?', rf'\1?v={v}', s)
+    idx.write_bytes(s.encode('utf-8'))
 print('version', v)

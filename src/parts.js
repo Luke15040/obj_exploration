@@ -433,6 +433,23 @@ function chooseFaces(faces, count) {
  * content: 3D boxes of the electronics · spk: 3D box of the speaker module (front, centre)
  * Returns { prim, spots: [{ type, p, n }] } — p on the surface, n its outward normal.
  */
+/**
+ * Case 2: where the screen sits on the front — a coarse choice, not a position:
+ * above, below, left or right of the speaker, one clearance away (centre, z = 0).
+ */
+export const SCREEN_SPOTS = ['top', 'bottom', 'left', 'right'];
+export function screenSlot(spot = 'top', spk, scr) {
+  const g = CLEARANCE + 2;
+  if (spot === 'bottom') return [0, -(spk[1] / 2 + g + scr[1] / 2), 0];
+  if (spot === 'left') return [-(spk[0] / 2 + g + scr[0] / 2), 0, 0];
+  if (spot === 'right') return [spk[0] / 2 + g + scr[0] / 2, 0, 0];
+  return [0, spk[1] / 2 + g + scr[1] / 2, 0];
+}
+/** The same, from the current libraries (speaker and display) by name. */
+export function screenSlotFor(spot, speakerLib = 'speaker', screenLib = 'matrix') {
+  return screenSlot(spot, LIBRARY[speakerLib].size, LIBRARY[screenLib].size);
+}
+
 function primLayout(shape, content, spk, knobCount, pad) {
   const wall = pad + 2;
   const zBack = Math.min(...content.map((b) => b.lo[2])) - pad;
@@ -481,14 +498,66 @@ function primLayout(shape, content, spk, knobCount, pad) {
  * keyed by the inputs rounded to 0.01 mm. Callers must treat the result as read-only.
  */
 const layoutCache = new Map();
+const WHEEL_SINK = 4;   // mm: the wheels reach this far below the skin (they touch the floor, the skin doesn't)
+const WHEEL_GAP = 5;    // mm: between the skin's widest point and a wheel
+/** The skin's widest |x| (mm): the fitted profiles, or the parts' boxes + padding; stretched like the skin. */
+function skinSide(L, s) {
+  const xs = L.prims?.length
+    ? L.prims.map((P) => Math.abs(P.c[0]) + (P.kind === 1 ? P.h[0] : P.kind === 2 || P.kind === 4 ? P.a : P.a / Math.cos(Math.PI / P.n)))
+    : L.parts.map((p) => Math.abs(p.c[0]) + extents(p)[0] + s.pad + 7);
+  const x = Math.max(...xs), st = L.stretch;
+  return st ? Math.abs(st.c[0]) + (x - Math.abs(st.c[0])) * st.s[0] : x;
+}
+/** The skin's lowest point (mm): the fitted profile, or the parts' boxes + padding; stretched like the skin. */
+function skinBottom(L, s) {
+  const b = L.prims?.length
+    ? Math.min(...L.prims.map((P) => profileY(P)[0]))
+    : Math.min(...L.parts.map((p) => p.c[1] - extents(p)[1])) - s.pad - 7;   // (+ the smooth blend between parts and the cells' half step)
+  const st = L.stretch;
+  return st ? st.c[1] + (b - st.c[1]) * st.s[1] : b;
+}
+
 export function layoutParts(s) {
   const key = JSON.stringify(s, (k, v) => (typeof v === 'number' ? Math.round(v * 100) / 100 : v));
   const hit = layoutCache.get(key);
   if (hit) return hit;
-  const L = computeLayout(s);
+  let L = computeLayout(s);
+  // it moves: the wheels must stand on the floor — their bottom a little below the skin's
+  // lowest point, whatever the shape, the screen or the stretch made of it. The shape can
+  // change with the servos (they move with the axle), so settle it in a few passes.
+  if (L.wheels) {
+    // the servos (and so the axle) stay low; the shape doesn't depend on the wheels. Two things
+    // to settle: the wheels must reach below the skin (if the chosen size can't, the smallest
+    // that can is used — the wheels node shows it), and clear its widest point (axles bridge it)
+    let dmin = 0, out = 0;
+    for (let k = 0; k < 4; k++) {
+      const need = 2 * (L.wheels.l[1] - (skinBottom(L, s) - WHEEL_SINK));
+      const grow = need > 2 * L.wheels.R + 0.5;
+      const dx = Math.max(0, skinSide(L, s) + WHEEL_GAP + L.wheels.hw - (L.wheels.r[0] - Math.max(0, s.wheelSpread ?? 0)));   // (the user's spread comes on top)
+      if (!grow && dx < 0.3) break;
+      if (grow) dmin = Math.ceil(need);
+      out += dx;
+      L = computeLayout({ ...s, wheelDmin: dmin, wheelOut: out });
+    }
+    L.wheels.minD = Math.max(dmin, Math.ceil(2 * (L.wheels.l[1] - (skinBottom(L, s) - WHEEL_SINK))));
+  }
   layoutCache.set(key, L);
   if (layoutCache.size > 8) layoutCache.delete(layoutCache.keys().next().value);
   return L;
+}
+
+/**
+ * Stretch node: the skin is stretched in x / y around the middle of the parts inside
+ * (the add-on modules left out, so the centre does not move when a knob is placed).
+ */
+function stretchOf(parts, st) {
+  const lo = [Infinity, Infinity], hi = [-Infinity, -Infinity];
+  for (const p of parts) {
+    if (/^(speaker|encoder)-/.test(p.key)) continue;   // (servos count: the shape grows around them)
+    for (let k = 0; k < 2; k++) { lo[k] = Math.min(lo[k], p.c[k] - p.h[k]); hi[k] = Math.max(hi[k], p.c[k] + p.h[k]); }
+  }
+  const c = lo[0] < hi[0] ? [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2] : [0, 0];
+  return { c, s: st ? [st[0], st[1]] : [1, 1] };
 }
 
 function computeLayout(s) {
@@ -572,6 +641,31 @@ function computeLayout(s) {
     brain = add('brain', 'piZero', [0, brainY + pi[1] / 2, back], { group: 'brain', rank: 3 });
     hat = add('hat', 'respeaker', [0, brainY + 1.4 + hs[1] / 2, back], { group: 'brain', rank: 3 });
   }
+
+  // case 2 · "moves": two servos either side of the electronics, low, their shafts on one axle
+  // through the middle of the box's depth; the wheels outside the skin, resting below it.
+  // The wheel model is 90 mm across: other diameters scale it (half width included).
+  let wheels = null;
+  if (box2 && s.moves && shape !== 'totem') {
+    const D = Math.max(s.wheelD ?? 90, s.wheelDmin ?? 0), R = D / 2, hw = 15.5 * (D / 90);   // (never too small to reach the floor)
+    let mx = SPK[0] / 2, my = -SPK[1] / 2;
+    for (const p of [battery, buck, brain, hat].filter(Boolean)) { mx = Math.max(mx, Math.abs(p.c[0]) + p.h[0]); my = Math.min(my, p.c[1] - p.h[1]); }
+    const zA = back;                                         // the axle runs through the electronics layer
+    // the servos rest at the bottom of the electronics and the axle runs through their shafts:
+    // big wheels simply reach further below (the body rides higher), they never lift the servos
+    // (that grew the shape around them). layoutParts only LOWERS the axle if the wheels would not
+    // reach the floor, and pushes the wheels out past the skin's widest point (s.wheelOut).
+    const wy = my + servo[1] / 2;
+    const sx = mx + CLEARANCE + servo[0] / 2;
+    sL = add('servo-left', 'servo', [-sx, wy, zA - LIBRARY.servo.shaftZ], { R: MIRROR_X, fixed: true });
+    sR = add('servo-right', 'servo', [sx, wy, zA - LIBRARY.servo.shaftZ], { fixed: true });
+    const ad = LIBRARY.servoAdapter.size;
+    adapter = add('servo-adapter', 'servoAdapter', [0, my + ad[1] / 2, back - LIBRARY.battery.size[2] / 2 - CLEARANCE - ad[2] / 2], { rank: 1 });
+    const wx = sx + servo[0] / 2 + s.pad + 2 + hw + Math.max(0, s.wheelOut ?? 0) + Math.max(0, s.wheelSpread ?? 0);   // + the user's spread (drag a wheel)
+    // axleIn: where the axle leaves the servo (its outer face); it runs out to the wheel's hub
+    wheels = { l: [-wx, wy], r: [wx, wy], z: zA, scale: D / 90, R, hw, axleIn: sx + servo[0] / 2 };
+  }
+
   // I2C: the brain has a single port (the Feather's STEMMA QT, or the HAT's Grove). With the screen
   // and knobs together, a passive 5-port hub sits beside the brain and each device gets its own cable
   const i2cCount = (!box2 || s.withScreen ? 1 : 0) + knobs.length;
@@ -583,13 +677,13 @@ function computeLayout(s) {
   const scrLib = s.screen ?? 'matrix';
   const scrSize = LIBRARY[scrLib].size;
   let screenAt = null;
-  if (box2 && s.withScreen) screenAt = [0, SPK[1] / 2 + CLEARANCE + 2 + scrSize[1] / 2, 0];
+  if (box2 && s.withScreen) screenAt = screenSlot(s.screenSpot, SPK, scrSize);
 
   // case 2 primitive: shape and add-on spots from the electronics as placed (before any relaxing),
   // so the CPU surface and the shader always agree
   let shaped = null;
   if (prim) {
-    const content = [battery, buck, brain, hat, hub].filter(Boolean).map((p) => ({ lo: p.c.map((v, k) => v - p.h[k]), hi: p.c.map((v, k) => v + p.h[k]) }));
+    const content = [battery, buck, brain, hat, hub, sL, sR, adapter].filter(Boolean).map((p) => { const e = extents(p); return { lo: p.c.map((v, k) => v - e[k]), hi: p.c.map((v, k) => v + e[k]) }; });
     const sd = SPK, zc = -(sd[2] / 2 + s.pad);
     const spk = { lo: [-sd[0] / 2, -sd[1] / 2, zc - sd[2] / 2], hi: [sd[0] / 2, sd[1] / 2, zc + sd[2] / 2] };
     if (shape === 'totem') {
@@ -629,7 +723,9 @@ function computeLayout(s) {
   // along their surface normal (the skin, the holes and the knob follow them) ----
   const box = (p) => { const e = extents(p); return { lo: p.c.map((v, k) => v - e[k]), hi: p.c.map((v, k) => v + e[k]) }; };
   const clearOf = (a, b) => [0, 1, 2].some((k) => a.lo[k] - b.hi[k] >= CLEARANCE || b.lo[k] - a.hi[k] >= CLEARANCE);
-  const wheelsAsParts = box2 ? [] : [s.wl, s.wr].map((w) => ({ c: [w[0], w[1], 0], h: [s.wheelHalfW + 2, 47, 47], R: IDENTITY }));
+  const wheelsAsParts = box2
+    ? (wheels ? [wheels.l, wheels.r].map((w) => ({ c: [w[0], w[1], wheels.z], h: [wheels.hw + 2, wheels.R + 2, wheels.R + 2], R: IDENTITY })) : [])
+    : [s.wl, s.wr].map((w) => ({ c: [w[0], w[1], 0], h: [s.wheelHalfW + 2, 47, 47], R: IDENTITY }));
   const offsets = s.extras.map(() => 0);
   const modules = [...spkParts, ...encParts];
   const mountOf = [...speakers, ...knobs];
@@ -652,7 +748,7 @@ function computeLayout(s) {
   const groups = {};
   for (const p of parts) (groups[p.group] ??= []).push(p);
   // the wheels are obstacles too (not parts: they are provisional), plus room to spin
-  if (!box2) {
+  if (wheelsAsParts.length) {
     groups['wheel-left'] = [{ ...wheelsAsParts[0], fixed: true }];
     groups['wheel-right'] = [{ ...wheelsAsParts[1], fixed: true }];
   }
@@ -701,7 +797,16 @@ function computeLayout(s) {
     const pa = a.c, pb = b.c, back = Math.min(...spkParts.map((p) => box(p).lo[2])) - 5;
     return [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2, Math.min(back, pa[2], pb[2])];
   };
-  if (box2) {
+  if (box2 && sL) {
+    // it moves: the servo bus adapter takes the battery and feeds the regulator, as on the robot
+    wire('servoBus', sL, 'bus', adapter, 'servoA');
+    wire('servoBus', sR, 'bus', adapter, 'servoB');
+    wire(wall ? 'power12' : 'power', battery, wall ? 'out' : 'xt30', adapter, 'power');
+    wire(wall ? 'power12' : 'power', adapter, 'power', buck, 'vin');
+    wire('power5', buck, 'vout', brain, 'pwr');
+    wire('usb', adapter, 'usb', brain, 'usb');
+    for (const sp of spkParts) wire('speaker', sp, 'lead', hat, 'spk');
+  } else if (box2) {
     wire(wall ? 'power12' : 'power', battery, wall ? 'out' : 'xt30', buck, 'vin');
     wire('power5', buck, 'vout', brain, 'pwr');
     for (const sp of spkParts) wire('speaker', sp, 'lead', hat, 'spk');
@@ -756,7 +861,7 @@ function computeLayout(s) {
     // skin has a front even before they are in); no neck
     const chassis = { a: [-34, 0, -16], b: [40, 0, -16], r: 12 };
     const neck = { a: brain.c.slice(), b: brain.c.slice(), r: 0 };
-    return { parts: parts.slice(0, MAX_PARTS), chassis, neck, cables: cables.slice(0, MAX_CABLES), offsets, prims: shaped?.prims ?? [], spots: shaped?.spots ?? null };
+    return { parts: parts.slice(0, MAX_PARTS), chassis, neck, cables: cables.slice(0, MAX_CABLES), offsets, prims: shaped?.prims ?? [], spots: shaped?.spots ?? null, stretch: stretchOf(parts, s.stretch), wheels };
   }
 
   // provisional structure: a frame bar between the servos, and a neck up to the matrix
@@ -771,7 +876,7 @@ function computeLayout(s) {
     r: s.neckR * t * t * (3 - 2 * t),
   };
 
-  return { parts: parts.slice(0, MAX_PARTS), chassis, neck, cables: cables.slice(0, MAX_CABLES), offsets, prims: [] };
+  return { parts: parts.slice(0, MAX_PARTS), chassis, neck, cables: cables.slice(0, MAX_CABLES), offsets, prims: [], stretch: stretchOf(parts, s.stretch) };
 }
 
 /** Smallest wheel half-track at which the two servos still fit side by side. */

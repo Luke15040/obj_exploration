@@ -1,11 +1,12 @@
-import { CONFIG } from '../config.js?v=202610021927';
-import { state, onChange, addExtra, updateExtra, removeExtra, mountNormal } from '../state.js?v=202610021927';
-import { view } from '../view.js?v=202610021927';
-import { Spring } from '../body/springs.js?v=202610021927';
-import { snapRay, resnap, frontPoint, shapeSpots } from '../body/sdf.js?v=202610021927';
-import { FREE_SLOTS, freeKnobSpots } from '../parts.js?v=202610021927';
-import { holePattern } from '../speaker-patterns.js?v=202610021927';
-import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js?v=202610021927';
+import { CONFIG } from '../config.js?v=202610071417';
+import { state, params, onChange, addExtra, updateExtra, removeExtra, mountNormal } from '../state.js?v=202610071417';
+import { view } from '../view.js?v=202610071417';
+import { Spring } from '../body/springs.js?v=202610071417';
+import { snapRay, resnap, frontPoint, shapeSpots, faceAnchors } from '../body/sdf.js?v=202610071417';
+import { FREE_SLOTS, freeKnobSpots } from '../parts.js?v=202610071417';
+import { holePattern } from '../speaker-patterns.js?v=202610071417';
+import { drawMarkers } from './markers.js?v=202610071417';
+import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js?v=202610071417';
 
 const NS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs = {}, parent) => {
@@ -44,10 +45,11 @@ class Spring3 {
  *
  * Canonical positions live in `state.extras`; this module owns the animation.
  */
-export function createExtras(svg, { onPulse, offsets = () => [] } = {}) {
+export function createExtras(svg, { onPulse, offsets = () => [], dotGrid = null } = {}) {
   const P = CONFIG.palette;
   const T = CONFIG.extras;
   const layer = el('g', { class: 'extras' }, svg);
+  const anchorLayer = el('g', { class: 'snap-anchors', 'pointer-events': 'none' }, svg);   // the face's snap points, shown while dragging
   const rt = new Map(); // id → runtime (springs, svg nodes)
   let hovered = null;
   let drag = null;
@@ -208,9 +210,28 @@ export function createExtras(svg, { onPulse, offsets = () => [] } = {}) {
       if (!drag.attached) clickIn(r, res);        // re-attached: magnetic click
       drag.attached = true;
       r.float = res.pulled ? res.from : null;     // keep the field line while pulled
-      updateExtra(r.id, { p: res.p, n: res.n });
+      // not free: the part clicks to the nearest snap point of the face it is on
+      // (snap points already taken by another part are skipped). In the cross view the
+      // snap points are the dots drawn on the shape: the nearest ones around the cursor.
+      const others = state.extras.filter((x) => x.id !== r.id);
+      // (a speaker grille is wide: keep a knob off all of it)
+      const free = (A) => !others.some((o) => Math.hypot(o.p[0] - A.p[0], o.p[1] - A.p[1], o.p[2] - A.p[2]) < (o.type === 'speaker' || r.type === 'speaker' ? 36 : 24));
+      const anchors = (params.view === 'cross' && dotGrid ? dotAnchors(ev.clientX, ev.clientY) : faceAnchors(res.n)).filter(free);
+      let best = null, bd = Infinity;
+      for (const A of anchors) {
+        const dd = Math.hypot(A.p[0] - res.p[0], A.p[1] - res.p[1], A.p[2] - res.p[2]);
+        if (dd < bd) { bd = dd; best = A; }
+      }
+      drag.anchors = anchors;
+      if (best && best !== drag.anchor) {
+        if (drag.anchor) r.scale.velocity += 2.5;   // a small click at every new snap
+        drag.anchor = best;
+      }
+      // no free snap point here (e.g. over the speaker): the part stays where it was
+      if (best) updateExtra(r.id, { p: best.p, n: best.n });
     } else {
       drag.attached = false;
+      drag.anchors = null;
       r.float = res.p;                            // hover in the air at the cursor
     }
   });
@@ -250,6 +271,19 @@ export function createExtras(svg, { onPulse, offsets = () => [] } = {}) {
       e.n = mountNormal(s.n);
     }
   });
+
+  /** Cross view: the dots under / around the cursor, cast onto the surface. */
+  function dotAnchors(x, y) {
+    const g = dotGrid();
+    const i0 = Math.round((x - g.ox) / g.cell - 0.5), j0 = Math.round((y - g.oyTop) / g.cell - 0.5);
+    const out = [];
+    for (let j = j0 - 1; j <= j0 + 1; j++) for (let i = i0 - 1; i <= i0 + 1; i++) {
+      const { o, d } = view.ray(g.ox + (i + 0.5) * g.cell, g.oyTop + (j + 0.5) * g.cell);
+      const h = snapRay(o, d, 0, null);
+      if (h.attached) out.push({ p: h.p, n: h.n });
+    }
+    return out;
+  }
 
   /* ---------- per frame ---------- */
 
@@ -294,7 +328,27 @@ export function createExtras(svg, { onPulse, offsets = () => [] } = {}) {
   }
 
   /** Wireframes, labels, magnet line and click-in burst. */
+  // the faces turned toward the camera: in the cross 2 view their snap points are always shown
+  const AXES = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  function visibleAnchors() {
+    const f = view.cam.fwd, out = [];
+    for (const a of AXES) if (-(a[0] * f[0] + a[1] * f[1] + a[2] * f[2]) > 0.25) out.push(...faceAnchors(a));
+    return out;
+  }
+
+  /** Snap markers (markers.js): while dragging, the face's points; in cross 2 always, as dots. */
+  function renderAnchors() {
+    const dragging = drag && drag.attached && drag.anchors;
+    const idle = (params.view === 'cross2' || (params.view === 'density' && params.densSnaps === 'always')) && !dragging;
+    const list = dragging ? drag.anchors : idle ? visibleAnchors() : [];
+    drawMarkers(anchorLayer, list.map((A) => {
+      const [x, y] = view.project(...A.p);
+      return { x, y, p: A.p, n: A.n, on: !!dragging && A === drag.anchor };
+    }), { idle: params.view === 'cross2' || (params.view === 'density' && params.densSnaps === 'always') });
+  }
+
   function render() {
+    renderAnchors();
     const offs = offsets();
     let ri = 0;
     for (const r of rt.values()) {

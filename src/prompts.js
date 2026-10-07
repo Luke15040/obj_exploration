@@ -1,8 +1,9 @@
-import { CONFIG } from './config.js?v=202610021927';
-import { state, params, setPose, getPose, setShape, setKind, setShape2, updateExtra, setWithScreen } from './state.js?v=202610021927';
-import { SHAPES, TOTEM_POOL, TOTEM_BASE, FREE_SLOTS, freeKnobSpots } from './parts.js?v=202610021927';
-import { frontPoint, shapeSpots } from './body/sdf.js?v=202610021927';
-import { view } from './view.js?v=202610021927';
+import { CONFIG } from './config.js?v=202610071417';
+import { state, params, setPose, getPose, setShape, setKind, setShape2, updateExtra, setWithScreen, setMoves } from './state.js?v=202610071417';
+import { SHAPES, TOTEM_POOL, TOTEM_BASE, FREE_SLOTS, freeKnobSpots } from './parts.js?v=202610071417';
+import { frontPoint, shapeSpots, stretchPoint } from './body/sdf.js?v=202610071417';
+import { view } from './view.js?v=202610071417';
+import { createBlockPrompt } from './ui/blocks.js?v=202610071417';
 
 /**
  * Guided prompts: a few canned "prompts" that reshape the object, standing in
@@ -38,6 +39,7 @@ const ROBOT = [
   {
     id: 'frog',
     prompt: 'i want it to look like a tiny frog',
+    block: 'looks like a tiny frog', hue: 'teal', glyph: 'triangle',
     ref: 'frog',
     // low and squat: a soft, round skin around the parts, the screen sinks onto
     // it and two eyes pop up on top
@@ -51,6 +53,7 @@ const ROBOT = [
   {
     id: 'walle',
     prompt: 'i want it to look like wall-e',
+    block: 'looks like wall-e', hue: 'magenta', glyph: 'diamond',
     ref: 'walle',
     // wide stance, slim waist, head lifted on a long thin neck
     steps: [
@@ -63,6 +66,7 @@ const ROBOT = [
   {
     id: 'speak',
     prompt: 'i want this thing to speak',
+    block: 'can speak', hue: 'red', glyph: 'ring',
     steps: [
       { at: 0, add: 'speaker' },
     ],
@@ -84,14 +88,41 @@ const SPEAKER_BOX = [
   {
     id: 'face',
     prompt: 'i want it to have a face',
+    block: 'has a face', hue: 'teal', glyph: 'dot',
     // a screen goes on the front, above the speaker (a level of its own in a totem)
     steps: [
       { at: 0, face: true },
     ],
   },
   {
+    id: 'moves',
+    prompt: 'i want it to move',
+    block: 'moves', glyph: 'semi',
+    // two servos and two wheels (their size in the wheels node)
+    steps: [
+      { at: 0, moves: true },
+    ],
+  },
+  {
     id: 'two',
     prompt: 'i want to control bass and volume',
+    chipOnly: true,   // (the main page's chip; the block prompt has one piece per knob)
+    steps: [
+      { at: 0, add: 'knob', always: true },
+    ],
+  },
+  {
+    id: 'bass',
+    prompt: 'i want to control the bass',
+    block: 'lets me control bass', glyph: 'square', blockOnly: true,
+    steps: [
+      { at: 0, add: 'knob', always: true },   // one knob each: bass and volume together make two
+    ],
+  },
+  {
+    id: 'volume',
+    prompt: 'i want to control the volume',
+    block: 'lets me control volume', glyph: 'triangle', blockOnly: true,
     steps: [
       { at: 0, add: 'knob', always: true },
     ],
@@ -104,10 +135,11 @@ const SPEAKER_BOX = [
     steps: [
       { at: 0, clear: true },
       { at: 0, face: false },
+      { at: 0, moves: false },
       { at: 0, form: 'free' },
       { at: 0, dur: 1000, shape: BOX_SHAPE },
       { at: 700, add: 'speaker' },
-      { at: 1500, add: 'knob' },
+      { at: 1500, add: 'knob', base: true },   // (not with the block prompt: there every knob comes from a prompt)
     ],
   },
 ];
@@ -139,7 +171,7 @@ export function createPrompts({ extras, body, nodes }) {
 
   function buildChips() {
     chips.innerHTML = '';
-    for (const p of PRESETS[state.kind]) {
+    for (const p of PRESETS[state.kind].filter((q) => !q.blockOnly)) {
       const b = document.createElement('button');
       b.textContent = p.prompt;
       if (p.ghost) b.classList.add('ghost');
@@ -194,7 +226,7 @@ export function createPrompts({ extras, body, nodes }) {
     let ki = 0;
     for (const e of state.extras) {
       const spot = e.type === 'speaker' ? FREE_SLOTS.speaker : ks[ki++];
-      const hit = spot && frontPoint(spot[0], spot[1]);
+      const hit = spot && frontPoint(...stretchPoint(spot[0], spot[1]));
       if (hit) updateExtra(e.id, { p: hit.p, n: hit.n });
     }
   }
@@ -208,10 +240,14 @@ export function createPrompts({ extras, body, nodes }) {
     typed.textContent = '';
     state.wheels.linked = true;
     state.withScreen = false;   // a fresh speaker box starts without a screen
+    state.moves = false;
+    state.wheelSpread = 0;
+    state.screenSpot = 'top';
     setKind(kind);
     markCase();
     markForm();
     buildChips();
+    blocks?.rebuild();
     body.scan(1.3);
     pulseAtObject();
     if (kind === 'robot') {
@@ -222,7 +258,7 @@ export function createPrompts({ extras, body, nodes }) {
       // the speaker comes in once the old add-ons are gone
       schedule(650, () => { if (extras.count('speaker') === 0) extras.spawn('speaker'); });
       schedule(1400, placeAll);
-      schedule(1500, () => { if (extras.count('knob') === 0) extras.spawn('knob'); });
+      if (!blocks) schedule(1500, () => { if (extras.count('knob') === 0) extras.spawn('knob'); });
     }
   }
 
@@ -265,6 +301,9 @@ export function createPrompts({ extras, body, nodes }) {
         // pixel 3d: a fresh palette, never the same one twice in a row
         const n = CONFIG.pixel3d.palettes.length;
         params.palette3d = (params.palette3d + 1 + Math.floor(Math.random() * (n - 1))) % n;
+        // density: a new colour for the shape too (never the same one twice in a row)
+        const D = CONFIG.density, dn = D.palettes.length;
+        D.palette = (D.palette + 1 + Math.floor(Math.random() * (dn - 1))) % dn;
       });
       end = play(preset.steps, start);
     }
@@ -294,13 +333,17 @@ export function createPrompts({ extras, body, nodes }) {
         schedule(at, () => tweens.push({ t: 0, dur: s.dur, kind: 'move', type: s.move, to: s.to, from: null }));
         end = Math.max(end, at + s.dur);
       }
-      if (s.add) {
+      if (s.add && !(s.base && blocks)) {
         schedule(at, () => { if (s.always || extras.count(s.add) === 0) extras.spawn(s.add); });
         if (state.kind === 'speaker') schedule(at + 120, placeAll);
         end = Math.max(end, at + 900);
       }
       if (s.clear) schedule(at, () => extras.clear());
       if (s.form) schedule(at, () => setForm(s.form));
+      if (s.moves !== undefined) {
+        schedule(at, () => { setMoves(s.moves); schedule(60, placeAll); });
+        end = Math.max(end, at + 700);
+      }
       if (s.face !== undefined) {
         schedule(at, () => { setWithScreen(s.face); schedule(60, placeAll); });
         end = Math.max(end, at + 700);
@@ -325,6 +368,7 @@ export function createPrompts({ extras, body, nodes }) {
   }
 
   function update(dt) {
+    blocks?.update(dt);
     const ms = dt * 1000;
 
     // one-shot actions
@@ -369,8 +413,43 @@ export function createPrompts({ extras, body, nodes }) {
     if (move) placeSpeaker(move);
   }
 
-  // the page opens on case 2 · speaker
-  setCase('speaker');
+  /* ---------- cross page: the prompt is built from blocks ("a thing that …") ---------- */
 
-  return { update, run, applyReference, setCase };
+  const begin = () => { busy = true; chips.classList.add('busy'); cases.classList.add('busy'); blocks?.setBusy(true); };
+  const finish = (at) => schedule(at, () => {
+    busy = false; chips.classList.remove('busy'); cases.classList.remove('busy'); blocks?.setBusy(false);
+    pulseAtObject();
+  });
+  /** A piece clicked into the sentence: its prompt plays (a reference is offered, as before). */
+  function attachBlock(p) {
+    begin();
+    let end = 400;
+    if (p.ref) { nodes.showReferences(); nodes.offerImage(p.ref); }
+    else end = play(p.steps, 0);
+    finish(end);
+  }
+  /** A piece left the sentence: back to the case's start (keeping the chosen shape), then every piece still in it. */
+  function recompose(list) {
+    begin();
+    nodes.reset();
+    const base = PRESETS[state.kind].find((q) => q.reset).steps.filter((s) => !s.form);
+    let at = play(base, 0) + 120;
+    for (const q of list) at = play(q.steps, at) + 120;
+    finish(at);
+  }
+  const blocks = document.body.dataset.page === 'cross'
+    ? createBlockPrompt({
+      presets: () => PRESETS[state.kind].filter((q) => !q.reset && !q.chipOnly),
+      onAttach: attachBlock,
+      onChange: recompose,
+      onReset: () => run(PRESETS[state.kind].find((q) => q.reset)),
+      grid: () => body.dotGrid(),
+    })
+    : null;
+
+  // the page opens on case 2 · speaker (the cross page: "a thing that lets me control volume")
+  setCase('speaker');
+  if (blocks) schedule(1500, () => blocks.attachById('volume'));
+
+  return { update, run, applyReference, setCase, placeAll };
 }

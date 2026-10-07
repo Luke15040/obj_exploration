@@ -1,6 +1,6 @@
-import { CONFIG } from '../config.js?v=202610021927';
-import { state, onChange } from '../state.js?v=202610021927';
-import { layoutParts } from '../parts.js?v=202610021927';
+import { CONFIG } from '../config.js?v=202610071417';
+import { state, onChange } from '../state.js?v=202610071417';
+import { layoutParts } from '../parts.js?v=202610071417';
 
 /**
  * CPU mirror of the shader's surface — used to place add-ons on the object
@@ -55,10 +55,12 @@ function currentLayout() {
     kind: state.kind,
     screen: state.screenType,
     withScreen: state.withScreen,
+    screenSpot: state.screenSpot,
     speakerLib: state.speakerLib,
     power: state.power,
     shape: state.shape,
     totem: state.totem,
+    stretch: state.stretch, moves: state.moves, wheelD: state.wheelD, wheelSpread: state.wheelSpread,
     knobCount: state.extras.filter((e) => e.type === 'knob').length,
     wl: [state.wheels.left.x, state.wheels.left.y],
     wr: [state.wheels.right.x, state.wheels.right.y],
@@ -75,12 +77,24 @@ function currentLayout() {
 
 /** Case 2 primitive: where the add-ons go when there are `knobCount` knobs (null on the free skin). */
 export function shapeSpots(knobCount) {
-  return layoutParts({
-    kind: state.kind, screen: state.screenType, withScreen: state.withScreen, speakerLib: state.speakerLib, power: state.power, shape: state.shape, totem: state.totem, knobCount,
+  const L = layoutParts({
+    kind: state.kind, screen: state.screenType, withScreen: state.withScreen, screenSpot: state.screenSpot, speakerLib: state.speakerLib, power: state.power, shape: state.shape, totem: state.totem, stretch: state.stretch, moves: state.moves, wheelD: state.wheelD, wheelSpread: state.wheelSpread, knobCount,
     wl: [state.wheels.left.x, state.wheels.left.y], wr: [state.wheels.right.x, state.wheels.right.y],
     scr: [state.screen.x, state.screen.y], pad: state.body.padding, neckR: state.body.neckR,
     extras: [], wheelHalfW: CONFIG.wheel.w / 2, screenHalfH: CONFIG.screen.h / 2,
-  }).spots;
+  });
+  // the spots sit on the fitted shape: carry them onto the stretched one (normals by the inverse)
+  const { c, s } = L.stretch;
+  return L.spots?.map((q) => {
+    const n = [q.n[0] / s[0], q.n[1] / s[1], q.n[2]], ln = Math.hypot(...n) || 1;
+    return { ...q, p: [c[0] + (q.p[0] - c[0]) * s[0], c[1] + (q.p[1] - c[1]) * s[1], q.p[2]], n: n.map((v) => v / ln) };
+  }) ?? null;
+}
+
+/** A point of the fitted shape's front (x, y), carried onto the stretched skin. */
+export function stretchPoint(x, y) {
+  const { c, s } = currentLayout().stretch;
+  return [c[0] + (x - c[0]) * s[0], c[1] + (y - c[1]) * s[1]];
 }
 
 /** Distance to the mountable surface (the skin around the parts), in mm. */
@@ -109,6 +123,14 @@ function primSDF(p, P) {
 }
 
 export function surfaceSDF(p, L = currentLayout()) {
+  // the stretch node, as bodySDF in shaders.js
+  const st = L.stretch;
+  if (!st || (st.s[0] === 1 && st.s[1] === 1)) return surfaceSDF0(p, L);
+  const q = [st.c[0] + (p[0] - st.c[0]) / st.s[0], st.c[1] + (p[1] - st.c[1]) / st.s[1], p[2]];
+  return surfaceSDF0(q, L) * Math.min(st.s[0], st.s[1]);
+}
+
+function surfaceSDF0(p, L) {
   if (L.prims?.length) return Math.min(...L.prims.map((P) => primSDF(p, P)));
   const S = CONFIG.screen, SB = state.body, SC = state.screen;
   const k = SB.blend;
@@ -204,6 +226,56 @@ export function resnap(p, n) {
   // fell off (e.g. the body shrank away): settle onto whatever is closest
   const hp = settle(p);
   return { p: hp, n: normalAt(hp) };
+}
+
+/**
+ * Snap anchors of the face a normal belongs to: the face = the surface whose
+ * normal points the same way (dominant axis ± sign). Its extent is found by
+ * casting a grid of rays along that axis; the anchors are a 3×3 grid on it
+ * (centre, edge middles, corners at a third of the size), each one a real
+ * surface point. Cached per face until the layout changes.
+ */
+const anchorCache = { L: null, faces: new Map() };
+function castAxis(a, s, u, v, ua, va) {
+  const o = [0, 0, 0], dir = [0, 0, 0];
+  o[ua] = u; o[va] = v; o[a] = s * 400; dir[a] = -s;
+  let t = 0;
+  for (let i = 0; i < 160 && t < 800; i++) {
+    const q = add(o, mul(dir, t));
+    const dist = surfaceSDF(q);
+    if (dist < 0.15) {
+      const hp = settle(q), n = normalAt(hp);
+      return n[a] * s > 0.55 ? { p: hp, n } : null;
+    }
+    t += Math.max(dist * 0.9, 0.4);
+  }
+  return null;
+}
+export function faceAnchors(n) {
+  const a = [0, 1, 2].reduce((b, k) => (Math.abs(n[k]) > Math.abs(n[b]) ? k : b), 0);
+  const s = Math.sign(n[a]) || 1;
+  const L = currentLayout();
+  const key = `${a}:${s}`;
+  if (anchorCache.L !== L) { anchorCache.L = L; anchorCache.faces.clear(); }
+  if (anchorCache.faces.has(key)) return anchorCache.faces.get(key);
+  const [ua, va] = [0, 1, 2].filter((k) => k !== a);
+  const C = [0, CONFIG.viewCenterY, 0];
+  const N = 21, Rg = 150;
+  let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const u = C[ua] + (i / (N - 1) * 2 - 1) * Rg, v = C[va] + (j / (N - 1) * 2 - 1) * Rg;
+    if (castAxis(a, s, u, v, ua, va)) { u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+  }
+  const list = [];
+  if (u0 <= u1) {
+    const cu = (u0 + u1) / 2, cv = (v0 + v1) / 2, wu = (u1 - u0) / 3, wv = (v1 - v0) / 3;
+    for (const fv of [1, 0, -1]) for (const fu of [-1, 0, 1]) {
+      const hit = castAxis(a, s, cu + fu * wu, cv + fv * wv, ua, va);
+      if (hit && !list.some((h) => len(sub(h.p, hit.p)) < 10)) list.push({ ...hit, centre: fu === 0 && fv === 0 });
+    }
+  }
+  anchorCache.faces.set(key, list);
+  return list;
 }
 
 /** Front-facing surface point straight behind (x, y), searching from the viewer side. */

@@ -452,14 +452,30 @@ vec2 wheelModel(vec3 q) {
   return vec2(d, albedo);
 }
 
+uniform float uWheelZ;      // depth of the axle (0 on the robot)
+uniform float uWheelScale;  // wheel size / the 90 mm model (0 = unset = 1)
+uniform float uAxleIn;      // > 0: an axle from x = ±uAxleIn (the servo's face) out to each wheel
 /** Both wheels; mirrored so the hub faces outward. */
 vec2 wheelsModel(vec3 p, vec2 wl, vec2 wr) {
-  vec3 ql = p - vec3(wl, 0.0);
+  float s = uWheelScale > 0.0 ? uWheelScale : 1.0;
+  vec3 ql = (p - vec3(wl, uWheelZ)) / s;
   ql.x = -ql.x;
-  return pU(wheelModel(ql), wheelModel(p - vec3(wr, 0.0)));
+  vec2 a = wheelModel(ql), b = wheelModel((p - vec3(wr, uWheelZ)) / s);
+  vec2 w = pU(vec2(a.x * s, a.y), vec2(b.x * s, b.y));
+  if (uAxleIn > 0.0) {
+    // the axles: plain metal rods from each servo out to its wheel's hub
+    float hl = 0.5 * (-uAxleIn - wl.x), hr = 0.5 * (wr.x - uAxleIn);
+    float al = pCylX(p - vec3(wl.x + hl, wl.y, uWheelZ), 3.0 * s, hl);
+    float ar = pCylX(p - vec3(uAxleIn + hr, wr.y, uWheelZ), 3.0 * s, hr);
+    w = pU(w, vec2(min(al, ar), M_METAL));
+  }
+  return w;
 }
 
-/** Slim rubber knob (≈ Ø14.5 × 11.5) on add-on i: ribbed grip, chamfered top. */
+/**
+ * Knob (≈ Ø14.5 × 11.5) on add-on i, kept simple on purpose: a plain cylinder with a soft
+ * top edge and one pointer notch across the top — just enough to read as a knob.
+ */
 vec2 knobModel(int i, vec3 p, vec3 dims) {
   vec3 P = uExtraP[i], N = uExtraN[i];
   float s = uExtraInfo[i].y;
@@ -469,12 +485,15 @@ vec2 knobModel(int i, vec3 p, vec3 dims) {
   vec3 rel = p - P;
   vec3 q = vec3(dot(rel, u), dot(rel, v), dot(rel, N));
   float r = dims.x * s, hh = dims.y * s * 0.5;
-  float d = pCylZ(q - vec3(0.0, 0.0, hh), r, hh);
-  if (d > 1.0) return vec2(d, M_RUBBER);                                      // far away: skip the ribs
-  d = max(d, (length(q.xy) - r + 1.2) * 0.7071 + (q.z - 2.0 * hh) * 0.7071);  // chamfer
-  float sector = 6.2831853 / 24.0;
-  float ang = mod(atan(q.y, q.x) + sector * 0.5, sector) - sector * 0.5;
-  d = max(d, -(length(q.xy) * abs(sin(ang)) - 0.35 + max(0.0, r - 0.6 - length(q.xy)) * 10.0)); // grip ribs
-  return vec2(d, M_RUBBER);
+  // rounded cylinder: soft edge of 1.6 mm all round the top
+  float e = 1.6 * s;
+  vec2 w = vec2(length(q.xy) - r + e, abs(q.z - hh) - hh + e);
+  float d = min(max(w.x, w.y), 0.0) + length(max(w, 0.0)) - e;
+  if (d > 1.0) return vec2(d, M_RUBBER);
+  // the pointer: one shallow notch from the centre to the rim, turned with the knob
+  float an = uExtraInfo[i].z;
+  vec2 k = mat2(cos(an), -sin(an), sin(an), cos(an)) * q.xy;
+  float notch = max(max(abs(k.y) - 0.7 * s, abs(k.x - r * 0.5) - r * 0.5), -(q.z - (2.0 * hh - 1.0 * s)));
+  return vec2(max(d, -notch), M_RUBBER);
 }
 `;

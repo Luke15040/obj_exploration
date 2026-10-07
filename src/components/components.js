@@ -1,7 +1,8 @@
-import { CONFIG } from '../config.js?v=202610021927';
-import { state } from '../state.js?v=202610021927';
-import { view } from '../view.js?v=202610021927';
-import { pathOf, segsOf, hull, cylinderLines, circle3, boxLines } from './wire.js?v=202610021927';
+import { CONFIG } from '../config.js?v=202610071417';
+import { state } from '../state.js?v=202610071417';
+import { screenSlotFor } from '../parts.js?v=202610071417';
+import { view } from '../view.js?v=202610071417';
+import { pathOf, segsOf, hull, cylinderLines, circle3, boxLines } from './wire.js?v=202610071417';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -100,12 +101,15 @@ export function createComponents(svg) {
     }
 
     const sp = parts.screen;
-    sp.g.style.display = state.kind === 'speaker' ? 'none' : '';
-    const B = boxLines([state.screen.x, state.screen.y, 0], [S.w / 2, S.h / 2, S.d / 2], S.display);
+    // case 2: the screen can be grabbed too (it snaps between its spots around the speaker)
+    const grab2 = state.kind === 'speaker' && state.withScreen && state.shape !== 'totem';
+    sp.g.style.display = state.kind === 'speaker' && !grab2 ? 'none' : '';
+    const sc = grab2 ? screenSlotFor(state.screenSpot, state.speakerLib, state.screenType) : [state.screen.x, state.screen.y, 0];
+    const B = boxLines([sc[0], sc[1], 0], [S.w / 2, S.h / 2, S.d / 2], S.display);
     sp.main.setAttribute('d', segsOf(B.shown));
     sp.hidden.setAttribute('d', segsOf(B.hidden));
     sp.soft.setAttribute('d', B.disp ? pathOf(B.disp, true) : '');
-    annotate(sp, B.pts, B.center, state.screen.x - I.screenX, state.screen.y - I.screenY);
+    annotate(sp, B.pts, B.center, grab2 ? 0 : state.screen.x - I.screenX, grab2 ? 0 : state.screen.y - I.screenY);
 
     renderGuides();
   }

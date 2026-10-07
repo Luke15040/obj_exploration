@@ -1,15 +1,44 @@
-import { state, moveWheel, moveScreen } from '../state.js?v=202610021927';
-import { view } from '../view.js?v=202610021927';
+import { state, moveWheel, moveScreen, setScreenSpot } from '../state.js?v=202610071417';
+import { SCREEN_SPOTS, screenSlotFor } from '../parts.js?v=202610071417';
+import { view } from '../view.js?v=202610071417';
+import { drawMarkers } from './markers.js?v=202610071417';
 
 /** Current centre (mm) of a part by its data-part name. */
 function partPos(part) {
+  if (part === 'screen' && state.kind === 'speaker') return screenSlotFor(state.screenSpot, state.speakerLib, state.screenType).slice(0, 2);
   if (part === 'screen') return [state.screen.x, state.screen.y];
   const side = part === 'wheel-left' ? 'left' : 'right';
   return [state.wheels[side].x, state.wheels[side].y];
 }
 
-function movePart(part, x, y) {
-  if (part === 'screen') moveScreen(x, y);
+/** Case 2: the spots around the speaker a knob does not already take. */
+function freeSpots() {
+  return SCREEN_SPOTS.filter((spot) => {
+    const c = screenSlotFor(spot, state.speakerLib, state.screenType);
+    return !state.extras.some((e) => e.type === 'knob' && Math.hypot(e.p[0] - c[0], e.p[1] - c[1]) < 30);
+  });
+}
+
+/**
+ * Case 2: a coarse choice, not a position — the side of the speaker the cursor is on
+ * (above / below / left / right of the speaker's centre), or the nearest free spot.
+ */
+function snapScreen(cx, cy) {
+  const free = freeSpots();
+  const side = Math.abs(cx) > Math.abs(cy) ? (cx < 0 ? 'left' : 'right') : (cy < 0 ? 'bottom' : 'top');
+  if (free.includes(side)) return setScreenSpot(side);
+  let best = state.screenSpot, bd = Infinity;
+  for (const spot of free) {
+    const c = screenSlotFor(spot, state.speakerLib, state.screenType);
+    const d = Math.hypot(c[0] - cx, c[1] - cy);
+    if (d < bd) { bd = d; best = spot; }
+  }
+  setScreenSpot(best);
+}
+
+function movePart(part, x, y, cursor) {
+  if (part === 'screen' && state.kind === 'speaker') snapScreen(cursor[0], cursor[1]);
+  else if (part === 'screen') moveScreen(x, y);
   else moveWheel(part === 'wheel-left' ? 'left' : 'right', x, y);
 }
 
@@ -22,6 +51,16 @@ function movePart(part, x, y) {
  */
 export function attachDrag(svg, hooks = {}) {
   let active = null; // { part, node, id, offset:[dx,dy], start:[x,y], axis }
+  // case 2: the screen's spots, shown while it is dragged
+  const spots = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  spots.setAttribute('class', 'screen-spots');
+  spots.setAttribute('pointer-events', 'none');
+  svg.appendChild(spots);
+  const showSpots = (on) => drawMarkers(spots, !on ? [] : freeSpots().map((spot) => {
+    const c = screenSlotFor(spot, state.speakerLib, state.screenType);
+    const [x, y] = view.project(c[0], c[1], 0);
+    return { x, y, p: [c[0], c[1], 0.5], n: [0, 0, 1], on: spot === state.screenSpot };
+  }));
 
   svg.addEventListener('pointerdown', (e) => {
     const node = e.target.closest('[data-part]');
@@ -35,6 +74,7 @@ export function attachDrag(svg, hooks = {}) {
     active = { part, node, id: e.pointerId, offset: [px - mx, py - my], start: [px, py], axis: null };
     node.classList.add('dragging');
     document.body.classList.add('is-dragging');
+    if (part === 'screen' && state.kind === 'speaker') showSpots(true);
     hooks.onStart?.(part);
   });
 
@@ -53,13 +93,15 @@ export function attachDrag(svg, hooks = {}) {
     } else {
       active.axis = null;
     }
-    movePart(active.part, x, y);
+    movePart(active.part, x, y, [mx, my]);
+    if (active.part === 'screen' && state.kind === 'speaker') showSpots(true);
   });
 
   const end = (e) => {
     if (!active || e.pointerId !== active.id) return;
     active.node.classList.remove('dragging');
     document.body.classList.remove('is-dragging');
+    showSpots(false);
     const { part } = active;
     active = null;
     hooks.onEnd?.(part, e);
