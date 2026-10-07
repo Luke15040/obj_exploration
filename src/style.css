@@ -1177,3 +1177,6 @@ body.look-1 .whl .wheel { color: var(--nd-ink); }
 body.look-1 .whl .wheel .rim, body.look-1 .whl .wheel .spokes { stroke: var(--nd-body); }
 body.look-1 .whl .wheel .hub { fill: var(--nd-body); }
 body.look-1 .whl input { accent-color: var(--nd-on, #d5cfc3); }
+/* views node: the compass fills the card's width, centred (the view name below widens the card) */
+body.look-1 .vws .grid { grid-template-columns: repeat(3, 1fr); width: 100%; justify-items: stretch; gap: 3px; }
+body.look-1 .vws .grid button { width: auto; height: 30px; }
