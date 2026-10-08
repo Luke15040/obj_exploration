@@ -1,5 +1,5 @@
-import { speakerHolesGLSL } from './glsl-speaker.js?v=202610081612';
-import { partsGLSL } from './glsl-parts.js?v=202610081612';
+import { speakerHolesGLSL } from './glsl-speaker.js?v=202610081626';
+import { partsGLSL } from './glsl-parts.js?v=202610081626';
 
 /**
  * Body shaders (GLSL ES 3.00 / WebGL2).
@@ -2802,6 +2802,9 @@ uniform int   uShowSil;      // 1 = the object's outline
 uniform int   uShowParts;    // 1 = the parts' outlines
 uniform float uGrainPx;      // the grain's own scale (≈ 1.2 css px in device px) — not tied to the lines' thickness
 uniform float uLineByPart;   // 1 = the parts' outlines each in its part's colour
+uniform sampler2D uOuter;    // the outside as outlines: its own layer (densPartsShader, look 6)
+uniform float uOutLine;      // 1 = the outside drawn as outlines (that layer) instead of solid
+uniform float uFrostOut;     // …and how frosted those outlines are (on their own, apart from the inside)
 uniform int   uPass;         // 0 = the density field, blended with last frame's (a fluid with memory) · 1 = draw
 uniform sampler2D uPrev;     // pass 0: last frame's field · pass 1: this frame's field
 uniform float uK;            // pass 0: how much of the new field goes in this frame (1 = no memory)
@@ -3056,7 +3059,7 @@ void drawMain(vec2 px) {
       if (pa > 0.0) pm = vec4(pm.rgb * (1.0 - 0.7 * pa), pm.a * (1.0 - 0.7 * pa)) + vec4(pc.rgb * pa, pa) * (1.0 - pm.a * (1.0 - 0.7 * pa));
     }
     // outside: what sits on the skin — knob caps, speaker holes, the screen's face — crisp, on top
-    if (uOutsideA > 0.01) {
+    if (uOutsideA > 0.01 && uOutLine < 0.5) {
       float t = t0;
       bool hit = false;
       for (int i = 0; i < 90 + uZero; i++) {
@@ -3109,6 +3112,20 @@ void drawMain(vec2 px) {
         float oa = oc4.a * uOutsideA;
         pm = vec4(oc4.rgb * oa, oa) + pm * (1.0 - oa);
       }
+    }
+    // …or as outlines, from their own layer, frosted as much as their own slider says
+    if (uOutsideA > 0.01 && uOutLine > 0.5) {
+      ivec2 lo = textureSize(uOuter, 0) - 1;
+      vec4 oc = vec4(0.0);
+      float fr = uFrostOut * uSigma * 0.28;
+      int taps = fr > 1.0 ? 20 : 1;
+      for (int k = 0; k < 20; k++) {
+        if (k >= taps) break;
+        float a = float(k) * 2.39996, rr = fr * sqrt((float(k) + 0.5) / 20.0);
+        oc += texelFetch(uOuter, clamp(ivec2(px + (taps > 1 ? vec2(cos(a), sin(a)) * rr : vec2(0.0))), ivec2(0), lo), 0);
+      }
+      oc *= uOutsideA / float(taps);
+      pm = oc + pm * (1.0 - oc.a);
     }
   }
   outColor = pm * uAlpha;
@@ -3216,7 +3233,57 @@ vec4 partsLayer(vec2 px) {
   return vec4(c, 1.0);
 }
 
-void main() { outColor = partsLayer(gl_FragCoord.xy); }
+/**
+ * The outside as outlines (uPartLook 6, a layer of its own, so density can frost it on its own): the knob caps'
+ * and the speaker holes' rims (g-buffer ids 3 / 5), and the screen's face — its edge and its lit LEDs / eyes.
+ */
+vec4 outerLayer(vec2 px) {
+  ivec2 ip = ivec2(px), lp = textureSize(uP, 0) - 1;
+  vec4 ink = vec4(uPLineCol * uPLineA, uPLineA);
+  float s0 = mod(floor(texelFetch(uP, ip, 0).r * 255.0 + 0.5), 10.0);
+  for (int k = 0; k < 16; k++) {
+    float an = float(k) * 0.7853982, rr = k < 8 ? uLineW : 0.5 * uLineW;
+    float sn = mod(floor(texelFetch(uP, clamp(ip + ivec2(round(vec2(cos(an), sin(an)) * rr)), ivec2(0), lp), 0).r * 255.0 + 0.5), 10.0);
+    if ((sn == 3.0) != (s0 == 3.0) || (sn == 5.0) != (s0 == 5.0)) return ink;
+  }
+  float pid = floor(texelFetch(uP, ip, 0).b * 255.0 + 0.5);
+  if (pid < 40.0) return vec4(0.0);
+  int i = int(pid) - 40;
+  int ty = uPartType[i];
+  if (ty != 6 && ty != 11) return vec4(0.0);
+  // the screen's face: where this pixel's ray meets its plane (seen from the front only)
+  vec2 o = (px - uCenterDev) / uFocal;
+  vec3 rd = normalize(uCamFwd + uCamRight * o.x + uCamUp * o.y);
+  vec3 n = uPartR[i][2];
+  float dn = dot(rd, n);
+  if (dn > -0.05) return vec4(0.0);
+  float t = dot(uPartC[i] + n * (ty == 6 ? 2.3 : 3.1) - uCamPos, n) / dn;
+  vec3 q = transpose(uPartR[i]) * (uCamPos + rd * t - uPartC[i]);
+  float lw = 0.5 * uLineW * t / uFocal;   // mm: half a line
+  if (ty == 6) {
+    vec2 e = vec2(19.8, 13.8) - abs(q.xy);
+    float m = min(e.x, e.y);
+    if (abs(m) < lw) return ink;   // the face's edge
+    if (m > 0.0) {
+      vec2 cell = clamp(floor((q.xy + vec2(19.5, 13.5)) / 3.0), vec2(0.0), vec2(12.0, 8.0));
+      vec2 cc = q.xy - (cell * 3.0 - vec2(18.0, 12.0));
+      if (max(abs(cc.x), abs(cc.y)) < 1.0 && litLED(vec2(cell.x, 8.0 - cell.y)) > 0.5) return ink;   // a lit LED
+    }
+  } else {
+    vec2 a = q.xy - vec2(0.0, -3.0);
+    vec2 e = vec2(17.25, 11.5) - abs(a);
+    float m = min(e.x, e.y);
+    if (abs(m) < lw) return ink;
+    if (m > 0.0) {
+      float eyes = max(abs(abs(a.x) - 6.0) - 1.6, abs(a.y - 2.5) - 2.2);
+      float smile = max(abs(length(a - vec2(0.0, 3.0)) - 7.5) - 0.7, a.y + 1.5);
+      if (min(eyes, smile) < 0.0) return ink;
+    }
+  }
+  return vec4(0.0);
+}
+
+void main() { outColor = uPartLook == 6 ? outerLayer(gl_FragCoord.xy) : partsLayer(gl_FragCoord.xy); }
 `;
 export const densPartsRealShader = densPartsShader.replace('#version 300 es', '#version 300 es\n#define REAL 1');
 

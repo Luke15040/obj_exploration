@@ -1,5 +1,5 @@
-import { CONFIG, SCREENS } from './config.js?v=202610081612';
-import { layoutParts, LIBRARY, CABLES, minHalfTrack } from './parts.js?v=202610081612';
+import { CONFIG, SCREENS } from './config.js?v=202610081626';
+import { layoutParts, LIBRARY, CABLES, minHalfTrack } from './parts.js?v=202610081626';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -105,6 +105,8 @@ export const params = {
   flatOutCol: 'same',   // flat hd 2: the outside's colour (screen, knobs, holes) — 'same' as the lines, or one of flatLineCols
   flatLines: 'colour',  // flat hd 2: the lines' colour — 'colour' (crayons) or 'grey' (pencil)
   crossBright: 0.5,     // pegboard (cross): the body's brightness — 0 darker · 0.5 as designed · 1 lighter
+  densOutLook: 'solid', // density: the outside (knob caps, holes, the screen) — 'solid' as it is, or 'outline'
+  densFrostOut: 0,      // density: how frosted the outside's outlines are (apart from the inside's frost)
   flatTone: 'grey',     // flat hd 2 (cross page): the parts in 'grey', 'orange' · 'aqua' · 'olive' · 'taupe' (one scale), or 'colour'
   flatShade: true,      // flat hd 2: the shade on faces seen edge-on (axonometric views)
   flatPartsBroken: true, // flat hd 2: the parts' outlines broken like the drawing (or whole)

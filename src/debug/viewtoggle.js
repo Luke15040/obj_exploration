@@ -1,6 +1,6 @@
-import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610081612';
-import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610081612';
-import { params } from '../state.js?v=202610081612';
+import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610081626';
+import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610081626';
+import { params } from '../state.js?v=202610081626';
 
 // three pages: the main one, lab.html with every particle / dither experiment, cross.html with only the cross view
 const LAB = document.body.dataset.page === 'lab';
@@ -10,7 +10,7 @@ const LAB_MODES = ['dots', 'dotsgrid', 'pixel', 'pixel2', 'live', 'particles', '
 const MODES = LAB ? LAB_MODES : CROSS ? ['cross', 'flathd2', 'density'] : MAIN_MODES;
 // the cross page's density starts as the soft ball: the outside on top, no outlines
 // (the defaults below are the look settled on: a pink soft ball, lit, the inside frosted behind it)
-if (CROSS) Object.assign(params, { unfinished: true, unfinishedSpeed: 0.16, flatAlive: 0.5, unfHand: 0.38, unfTwice: 0.49, unfGaps: 0.48, flatFrost: 0.07, flatInside: 0.21, flatOutside: 0.95, flatTone: 'taupe', flatLineW: 1.4, flatSkinFill: 0.08, flatLines: 'colour', flatParts: 'fill',
+if (CROSS) Object.assign(params, { unfinished: true, unfinishedSpeed: 0.16, flatAlive: 0.5, unfHand: 0.38, unfTwice: 0.49, unfGaps: 0.48, flatFrost: 0.07, flatInside: 0.21, flatOutside: 0.95, crossBright: 0.78, flatTone: 'taupe', flatLineW: 1.4, flatSkinFill: 0.08, flatLines: 'colour', flatParts: 'fill',
   flatLineCol: 'grey', flatOutCol: 'olive', flatShade: false, flatPartsBroken: true,   // (napkin: the user's screenshot, 2026-10-08)
   densGrain: 0.38, densEdge: 0.48, densStyle: 'grainy', densOutside: 0.78, densInside: 1, densFrost: 0.19, densMotion: 0.95, densDiverge: 0.07, densSoft: 0.18, densPalette: 3, densGlow: 0.58, densPartStyle: 'outline', densShapeA: 0.76, densTrans: 'free', densLines: { object: false, parts: false },
   densOutCol: 'grey', densPartLineW: 1.15, densPartLineA: 0.89, densPartLineCol: 'white' });   // (density: the user's screenshot, 2026-10-08)
@@ -218,6 +218,28 @@ export function createViewToggle({ orbit } = {}) {
   dglR.value = params.densGlow;
   dglR.addEventListener('input', () => { params.densGlow = Number(dglR.value); });
   document.body.appendChild(dgl);
+
+  // density: the outside solid or as outlines, and those outlines' own frost
+  if (CROSS) {
+    const dol = document.createElement('div');
+    dol.id = 'densoutlook';
+    dol.className = 'flatpill dpill';
+    dol.innerHTML = '<span class="lbl">outside</span><button data-dol="solid">solid</button><button data-dol="outline">outline</button>';
+    const dfo = document.createElement('div');
+    dfo.id = 'densfrostout';
+    dfo.className = 'dslider';
+    dfo.innerHTML = '<span class="lbl">outside clear</span><input type="range" min="0" max="1" step="0.01" aria-label="outside frost"><span class="lbl">frosted</span>';
+    const dfoR = dfo.querySelector('input');
+    dfoR.value = params.densFrostOut ?? 0;
+    dfoR.addEventListener('input', () => { params.densFrostOut = Number(dfoR.value); });
+    const markDol = () => {
+      dol.querySelectorAll('[data-dol]').forEach((b) => b.classList.toggle('on', b.dataset.dol === (params.densOutLook ?? 'solid')));
+      document.body.classList.toggle('dens-outoutl', params.densOutLook === 'outline');
+    };
+    markDol();
+    dol.addEventListener('click', (e) => { const b = e.target.closest('[data-dol]'); if (b) { params.densOutLook = b.dataset.dol; markDol(); } });
+    document.body.append(dol, dfo);
+  }
 
   // pegboard (cross): how bright the body is — darker ↔ lighter (0.5 = as designed)
   if (CROSS) {
@@ -699,7 +721,7 @@ export function createViewToggle({ orbit } = {}) {
       // their order: as the stylesheet stacks them (the lower, the earlier) — density: its own, top to bottom,
       // the parts and everything about their outline together
       const ORDER = params.view === 'density' ? ['densedge', 'densgrain', 'densstyle', 'denspal', 'densglow', 'densmotion', 'densdiverge', 'denssoft',
-        'denstrans', 'frost', 'densalpha', 'insideop', 'outsideop', 'densoutcol', 'densparts', 'denslines', 'denspartlw', 'denspartop', 'denspartcol', 'snapstyle']
+        'denstrans', 'frost', 'densalpha', 'insideop', 'outsideop', 'densoutlook', 'densoutcol', 'densfrostout', 'densparts', 'denslines', 'denspartlw', 'denspartop', 'denspartcol', 'snapstyle']
         : params.view === 'flathd2' ? ['flatlines', 'flatthin', 'flatfill', 'flatshade',
           'unfinished', 'unfgaps', 'unftwice', 'unfhand', 'unfspeed', 'flatalive',
           'flatpartsmode', 'flatpartlines', 'flattone', 'frost', 'insideop',
@@ -772,6 +794,8 @@ export function createViewToggle({ orbit } = {}) {
       denssoft: 'How tight or soft the shape is around the object.',
       densalpha: 'How see-through the shape is.',
       densoutcol: 'The colour of what sits outside: screen, knobs, speaker holes.',
+      densoutlook: 'What sits outside drawn solid, or as outlines.',
+      densfrostout: 'How frosted the outside outlines are, on their own.',
       densparts: 'How the parts inside are drawn.',
       denslines: 'Adds outlines to the object and / or its parts.',
       denspartlw: 'How thick the outlines are.',

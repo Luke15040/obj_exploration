@@ -1,4 +1,4 @@
-import { view } from '../view.js?v=202610081612';
+import { view } from '../view.js?v=202610081626';
 
 /**
  * The views node — two ways to pick one of the essential drawn views:

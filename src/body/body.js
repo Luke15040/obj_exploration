@@ -1,14 +1,14 @@
-import { CONFIG, NODE_PALETTE, CROSS_PALETTE } from '../config.js?v=202610081612';
-import { state, params } from '../state.js?v=202610081612';
-import { view } from '../view.js?v=202610081612';
-import { Spring } from './springs.js?v=202610081612';
-import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, flatBlurShader, gradientShader, markerShader, densityShader, densPartsShader, densPartsRealShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610081612';
-import { gbufferShader, edgeShader } from './blockshaders.js?v=202610081612';
-import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610081612';
-import { traceStrokes } from './strokes.js?v=202610081612';
-import { generateBlueNoise } from './bluenoise.js?v=202610081612';
-import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610081612';
-import { holePattern } from '../speaker-patterns.js?v=202610081612';
+import { CONFIG, NODE_PALETTE, CROSS_PALETTE } from '../config.js?v=202610081626';
+import { state, params } from '../state.js?v=202610081626';
+import { view } from '../view.js?v=202610081626';
+import { Spring } from './springs.js?v=202610081626';
+import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, flatBlurShader, gradientShader, markerShader, densityShader, densPartsShader, densPartsRealShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610081626';
+import { gbufferShader, edgeShader } from './blockshaders.js?v=202610081626';
+import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610081626';
+import { traceStrokes } from './strokes.js?v=202610081626';
+import { generateBlueNoise } from './bluenoise.js?v=202610081626';
+import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610081626';
+import { holePattern } from '../speaker-patterns.js?v=202610081626';
 
 const METHODS = { bayer: 0, blue: 1, split: 2 };
 
@@ -201,7 +201,8 @@ export function createBody(canvas) {
   const gtarget = createTarget(gl); // full-res g-buffer for the blocks view
   const g2target = createTarget(gl); // a second full-res g-buffer (density: part outlines)
   let densA = createTarget(gl), densB = createTarget(gl), densFresh = true;
-  const densParts = createTarget(gl);   // density: the parts inside, in the chosen look (kept while the scene stands still)
+  const densParts = createTarget(gl);
+  const densOuter = createTarget(gl);   // density: the outside as outlines (kept while the scene stands still)   // density: the parts inside, in the chosen look (kept while the scene stands still)
   const densP = lazy(densPartsShader), densPR = lazy(densPartsRealShader);   // its programs (real / grey: the heavy one, only when picked)   // density field, ping-pong (fluid memory)
   // cross-fade weight of each view (1 = fully shown)
   const VIEWS = ['dots', 'blocks', 'flat', 'flat2', 'pixel', 'pixel2', 'empty', 'blob', 'orbital', 'pixel3d', 'glass', 'sketch', 'flathd', 'flathd2', 'milk', 'live', 'cross', 'cross2', 'marker', 'density', 'particles', 'picasso', 'gradient'];
@@ -1535,6 +1536,35 @@ export function createBody(canvas) {
       gl.useProgram(densV.prog);
       gl.bindFramebuffer(gl.FRAMEBUFFER, densB.fbo);
     }
+    // the outside as outlines: their own layer (drawn again only when something changes), frosted on their own
+    const outLine = params.densOutLook === 'outline';
+    gl.uniform1f(u.uOutLine, outLine ? 1 : 0);
+    gl.uniform1f(u.uFrostOut, params.densFrostOut ?? 0);
+    if (outLine) {
+      if (densOuter.w !== size.w || densOuter.h !== size.h) { densOuter.resize(size.w, size.h); densOuter.w = size.w; densOuter.h = size.h; densOuter.key = null; }
+      const oHex = params.densOutCol && params.densOutCol !== 'real' ? CONFIG.flatLineCols[params.densOutCol] : CONFIG.flatLineCols[params.densPartLineCol] ?? '#ffffff';
+      const okey = sk + '|' + oHex + (params.densPartLineW ?? 1) + (params.densPartLineA ?? 1) + state.leds.join('');
+      if (okey !== densOuter.key) {
+        densOuter.key = okey;
+        const up = densP.uniforms;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, densOuter.fbo);
+        gl.viewport(0, 0, size.w, size.h);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(densP.prog);
+        sceneUniforms(up);
+        bindTex(1, g2target.tex, up.uP);
+        gl.uniform1f(up.uLineW, Math.max(1, 1.2 * pxr() * (params.densPartLineW ?? 1)));
+        gl.uniform3fv(up.uPLineCol, hexToRgb(oHex));
+        gl.uniform1f(up.uPLineA, params.densPartLineA ?? 1);
+        gl.uniform1i(up.uPartLook, 6);
+        gl.bindVertexArray(densP.quad);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.useProgram(densV.prog);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, densB.fbo);
+      }
+      bindTex(4, densOuter.tex, u.uOuter);
+    }
     bindTex(3, densParts.tex, u.uParts);
     gl.uniform1i(u.uPass, 0);
     bindTex(2, densA.tex, u.uPrev);
@@ -1812,9 +1842,11 @@ export function createBody(canvas) {
     gl.uniform1f(u.uVoxAmt, params.voxels ?? 0.2);
     gl.uniform1f(u.uVoxShimmer, params.voxShimmer ?? 0.2);
     gl.uniform1f(u.uTime, clock);
-    // the body's brightness slider: toward white above the middle, deeper below it
+    // the body's brightness slider: toward the page's warm grey above the middle, deeper below it —
+    // and a little warmer, in tune with the page (#f3f2ef)
     const bb = ((params.crossBright ?? 0.5) - 0.5) * 2;
-    const bright = (hex) => hexToRgb(hex).map((c) => (bb >= 0 ? c + (1 - c) * 0.45 * bb : c * (1 + 0.45 * bb)));
+    const PAGE = [0.953, 0.949, 0.937], WARM = [1.012, 1.0, 0.972];
+    const bright = (hex) => hexToRgb(hex).map((c, i) => Math.min(1, (bb >= 0 ? c + (PAGE[i] - c) * 0.45 * bb : c * (1 + 0.45 * bb)) * WARM[i]));
     gl.uniform3fv(u.uLightFill, bright(X.light));
     gl.uniform3fv(u.uTopFill, bright(X.top));
     gl.uniform3fv(u.uSideFill, bright(X.side));

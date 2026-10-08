@@ -1,9 +1,9 @@
-import { CONFIG } from './config.js?v=202610081612';
-import { state, params, setPose, getPose, setShape, setKind, setShape2, updateExtra, setWithScreen, setMoves, setScreenType, setScreenSpot } from './state.js?v=202610081612';
-import { SHAPES, TOTEM_POOL, TOTEM_BASE, FREE_SLOTS, freeKnobSpots } from './parts.js?v=202610081612';
-import { frontPoint, shapeSpots, stretchPoint, snapRay } from './body/sdf.js?v=202610081612';
-import { view } from './view.js?v=202610081612';
-import { createBlockPrompt } from './ui/blocks.js?v=202610081612';
+import { CONFIG } from './config.js?v=202610081626';
+import { state, params, setPose, getPose, setShape, setKind, setShape2, updateExtra, setWithScreen, setMoves, setScreenType, setScreenSpot } from './state.js?v=202610081626';
+import { SHAPES, TOTEM_POOL, TOTEM_BASE, FREE_SLOTS, freeKnobSpots } from './parts.js?v=202610081626';
+import { frontPoint, shapeSpots, stretchPoint, snapRay } from './body/sdf.js?v=202610081626';
+import { view } from './view.js?v=202610081626';
+import { createBlockPrompt } from './ui/blocks.js?v=202610081626';
 
 /**
  * Guided prompts: a few canned "prompts" that reshape the object, standing in

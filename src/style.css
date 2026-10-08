@@ -1628,3 +1628,17 @@ body[data-page="cross"] #toolbox { display: none !important; }
   background: var(--ink); animation: pl-caret 1.06s steps(1) infinite;
 }
 @keyframes pl-caret { 50% { opacity: 0; } }
+
+/* the page: one flat warm grey (cross page) */
+body[data-page="cross"] { background: #f3f2ef !important; }
+
+/* density: the outside solid / outline, and its outlines' own frost */
+.dpill { display: none !important; }
+body[data-page="cross"].mode-density .dpill { display: flex !important; }
+.dslider {
+  position: fixed; right: 20px; bottom: 60px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+.dslider input { width: 110px; }
+body[data-page="cross"].mode-density.dens-outoutl #densfrostout { display: flex; }
