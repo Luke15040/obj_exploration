@@ -1,12 +1,12 @@
-import { CONFIG } from '../config.js?v=202610081626';
-import { state, params, onChange, addExtra, updateExtra, removeExtra, mountNormal } from '../state.js?v=202610081626';
-import { view } from '../view.js?v=202610081626';
-import { Spring } from '../body/springs.js?v=202610081626';
-import { snapRay, resnap, frontPoint, shapeSpots, faceAnchors } from '../body/sdf.js?v=202610081626';
-import { FREE_SLOTS, freeKnobSpots } from '../parts.js?v=202610081626';
-import { holePattern } from '../speaker-patterns.js?v=202610081626';
-import { drawMarkers } from './markers.js?v=202610081626';
-import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js?v=202610081626';
+import { CONFIG } from '../config.js?v=202610081630';
+import { state, params, onChange, addExtra, updateExtra, removeExtra, mountNormal } from '../state.js?v=202610081630';
+import { view } from '../view.js?v=202610081630';
+import { Spring } from '../body/springs.js?v=202610081630';
+import { snapRay, resnap, frontPoint, shapeSpots, faceAnchors } from '../body/sdf.js?v=202610081630';
+import { FREE_SLOTS, freeKnobSpots } from '../parts.js?v=202610081630';
+import { holePattern } from '../speaker-patterns.js?v=202610081630';
+import { drawMarkers } from './markers.js?v=202610081630';
+import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js?v=202610081630';
 
 /** DOM writes only when the value changed: a write, even of the same value, can make the page lay out again. */
 const setA = (el, k, v) => { v = String(v); if (el.getAttribute(k) !== v) el.setAttribute(k, v); };

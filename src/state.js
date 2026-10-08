@@ -1,5 +1,5 @@
-import { CONFIG, SCREENS } from './config.js?v=202610081626';
-import { layoutParts, LIBRARY, CABLES, minHalfTrack } from './parts.js?v=202610081626';
+import { CONFIG, SCREENS } from './config.js?v=202610081630';
+import { layoutParts, LIBRARY, CABLES, minHalfTrack } from './parts.js?v=202610081630';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 

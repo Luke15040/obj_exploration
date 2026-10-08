@@ -1,5 +1,5 @@
-import { LIBRARY, CABLES } from '../parts.js?v=202610081626';
-import { params, state } from '../state.js?v=202610081626';
+import { LIBRARY, CABLES } from '../parts.js?v=202610081630';
+import { params, state } from '../state.js?v=202610081630';
 
 /**
  * Components list at the side, text only: the real parts in use (from the

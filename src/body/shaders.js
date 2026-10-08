@@ -1,5 +1,5 @@
-import { speakerHolesGLSL } from './glsl-speaker.js?v=202610081626';
-import { partsGLSL } from './glsl-parts.js?v=202610081626';
+import { speakerHolesGLSL } from './glsl-speaker.js?v=202610081630';
+import { partsGLSL } from './glsl-parts.js?v=202610081630';
 
 /**
  * Body shaders (GLSL ES 3.00 / WebGL2).

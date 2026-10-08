@@ -1,6 +1,6 @@
-import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610081626';
-import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610081626';
-import { params } from '../state.js?v=202610081626';
+import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610081630';
+import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610081630';
+import { params } from '../state.js?v=202610081630';
 
 // three pages: the main one, lab.html with every particle / dither experiment, cross.html with only the cross view
 const LAB = document.body.dataset.page === 'lab';

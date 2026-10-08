@@ -1,14 +1,14 @@
-import { CONFIG, NODE_PALETTE, CROSS_PALETTE } from '../config.js?v=202610081626';
-import { state, params } from '../state.js?v=202610081626';
-import { view } from '../view.js?v=202610081626';
-import { Spring } from './springs.js?v=202610081626';
-import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, flatBlurShader, gradientShader, markerShader, densityShader, densPartsShader, densPartsRealShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610081626';
-import { gbufferShader, edgeShader } from './blockshaders.js?v=202610081626';
-import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610081626';
-import { traceStrokes } from './strokes.js?v=202610081626';
-import { generateBlueNoise } from './bluenoise.js?v=202610081626';
-import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610081626';
-import { holePattern } from '../speaker-patterns.js?v=202610081626';
+import { CONFIG, NODE_PALETTE, CROSS_PALETTE } from '../config.js?v=202610081630';
+import { state, params } from '../state.js?v=202610081630';
+import { view } from '../view.js?v=202610081630';
+import { Spring } from './springs.js?v=202610081630';
+import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, flatBlurShader, gradientShader, markerShader, densityShader, densPartsShader, densPartsRealShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610081630';
+import { gbufferShader, edgeShader } from './blockshaders.js?v=202610081630';
+import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610081630';
+import { traceStrokes } from './strokes.js?v=202610081630';
+import { generateBlueNoise } from './bluenoise.js?v=202610081630';
+import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610081630';
+import { holePattern } from '../speaker-patterns.js?v=202610081630';
 
 const METHODS = { bayer: 0, blue: 1, split: 2 };
 
@@ -1842,11 +1842,9 @@ export function createBody(canvas) {
     gl.uniform1f(u.uVoxAmt, params.voxels ?? 0.2);
     gl.uniform1f(u.uVoxShimmer, params.voxShimmer ?? 0.2);
     gl.uniform1f(u.uTime, clock);
-    // the body's brightness slider: toward the page's warm grey above the middle, deeper below it —
-    // and a little warmer, in tune with the page (#f3f2ef)
+    // the body's brightness slider: toward white above the middle, deeper below it
     const bb = ((params.crossBright ?? 0.5) - 0.5) * 2;
-    const PAGE = [0.953, 0.949, 0.937], WARM = [1.012, 1.0, 0.972];
-    const bright = (hex) => hexToRgb(hex).map((c, i) => Math.min(1, (bb >= 0 ? c + (PAGE[i] - c) * 0.45 * bb : c * (1 + 0.45 * bb)) * WARM[i]));
+    const bright = (hex) => hexToRgb(hex).map((c) => (bb >= 0 ? c + (1 - c) * 0.45 * bb : c * (1 + 0.45 * bb)));
     gl.uniform3fv(u.uLightFill, bright(X.light));
     gl.uniform3fv(u.uTopFill, bright(X.top));
     gl.uniform3fv(u.uSideFill, bright(X.side));
