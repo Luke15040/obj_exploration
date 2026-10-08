@@ -1620,3 +1620,11 @@ body[data-page="cross"] #toolbox { display: none !important; }
 #leftmods .vgrid svg path { stroke-linecap: round; stroke-linejoin: round; }
 #leftmods .vgrid button[data-i="4"] svg { width: 18px; height: 18px; }
 #leftmods .vname { font-size: 10px; color: var(--ink-soft); white-space: nowrap; }
+
+/* the prompt: no box, just the sentence — with a blinking caret after it, as if you could still type */
+#promptline { background: none !important; border: 0 !important; }
+#promptline::after {
+  content: ''; display: inline-block; width: 1px; height: 1.15em; margin-left: 3px; vertical-align: -0.2em;
+  background: var(--ink); animation: pl-caret 1.06s steps(1) infinite;
+}
+@keyframes pl-caret { 50% { opacity: 0; } }

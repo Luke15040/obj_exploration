@@ -1,7 +1,7 @@
-import { CONFIG } from './config.js?v=202610081603';
-import { view } from './view.js?v=202610081603';
-import { Spring } from './body/springs.js?v=202610081603';
-import { params } from './state.js?v=202610081603';
+import { CONFIG } from './config.js?v=202610081612';
+import { view } from './view.js?v=202610081612';
+import { Spring } from './body/springs.js?v=202610081612';
+import { params } from './state.js?v=202610081612';
 
 const DEG = Math.PI / 180;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -87,6 +87,9 @@ export function createOrbit(svg) {
         drag.turning = true;
         glide = null; leave = null;
         drag.start = { ...shown };
+        // from the plan (top), a mostly sideways drag means 'turn it round': start from the axonometric height,
+        // else it would only spin in the plan and settle back there (it looked as if dragging had stopped working)
+        if (drag.start.pitch > S.axo + 5 && Math.abs(dx) > Math.abs(dy)) drag.start.pitch = S.axo;
         if (!params.moving) turnOut = { t: params.outT || 0 };   // the tiles shrink away while it already turns
       }
       turn = { yaw: drag.start.yaw - dx * S.freeYaw, pitch: clamp(drag.start.pitch + dy * S.freePitch, S.freeMin, S.top) };
@@ -136,7 +139,7 @@ export function createOrbit(svg) {
     const t = turn ?? shown;
     turn = null;
     let v;
-    if (t.pitch > (S.axo + S.top) / 2) v = { k: 2 * Math.round(t.yaw / (2 * S.yaw)), top: true };
+    if (t.pitch > S.axo + 0.75 * (S.top - S.axo)) v = { k: 2 * Math.round(t.yaw / (2 * S.yaw)), top: true };   // (the plan only when clearly asked for)
     else if (t.pitch < S.axo / 2) v = { k: 2 * Math.round(t.yaw / (2 * S.yaw)), top: false };              // an elevation
     else v = { k: 2 * Math.round((t.yaw - S.yaw) / (2 * S.yaw)) + 1, top: false };                          // an axonometric view
     cur = v;
