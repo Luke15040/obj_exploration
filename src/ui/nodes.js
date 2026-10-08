@@ -1,11 +1,11 @@
-import { CONFIG } from '../config.js?v=202610071442';
-import { state, params } from '../state.js?v=202610071442';
-import { view } from '../view.js?v=202610071442';
-import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js?v=202610071442';
-import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js?v=202610071442';
-import { SCREENS } from '../config.js?v=202610071442';
-import { refImageURL, REF_LABELS } from './refimages.js?v=202610071442';
-import { playVoice } from './sound.js?v=202610071442';
+import { CONFIG, NODE_PALETTE } from '../config.js?v=202610080154';
+import { state, params } from '../state.js?v=202610080154';
+import { view } from '../view.js?v=202610080154';
+import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js?v=202610080154';
+import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js?v=202610080154';
+import { SCREENS } from '../config.js?v=202610080154';
+import { refImageURL, REF_LABELS } from './refimages.js?v=202610080154';
+import { playVoice } from './sound.js?v=202610080154';
 
 const NS = 'http://www.w3.org/2000/svg';
 const easeOut = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
@@ -401,14 +401,12 @@ export function createNodes({ body }) {
   // which is which (hover only: a click — also the one that starts a drag — must not leave it on)
   const PART_OF = { screen: 'matrix', speaker: 'speaker-0', energy: 'battery' };
   // the nodes' own palette (yellow · orange · cyan · olive)
-  const NODE_COLOUR = { screen: '#ff8c55', speaker: '#e7e96c', energy: '#a0e0e0', wheels: '#8b8f63' };
+  const NODE_COLOUR = NODE_PALETTE.nodes;   // (the cross 'colour' style uses the same family: config.js)
   let lit = null;   // the node lit right now
-  const colourOf = (key) => {
-    const p = body.layout()?.parts.find((q) => q.key === key);
-    return p ? CONFIG.palette.flat.parts[p.lib] : null;
-  };
+  // (the colour is the node's own: the part only has to be there — e.g. the 2 W speaker too)
+  const hasPart = (key) => !!body.layout()?.parts.some((q) => q.key === key);
   const light = (k, on) => {
-    const node = TOOLS[k], key = PART_OF[k], c = on && colourOf(key) ? NODE_COLOUR[k] : null;
+    const node = TOOLS[k], key = PART_OF[k], c = on && hasPart(key) ? NODE_COLOUR[k] : null;
     node.classList.toggle('hl', !!c);
     if (c) node.style.setProperty('--hl', c); else node.style.removeProperty('--hl');
     if (c) { params.highlight = key; params.highlightColour = c; }
@@ -592,7 +590,7 @@ export function createNodes({ body }) {
 
     // which tools the object has right now
     const e = currentSpeaker();
-    const avail = { shape: state.kind === 'speaker', screen: state.kind === 'robot' || state.withScreen, speaker: !!e, energy: true };
+    const avail = { shape: state.kind === 'speaker', screen: state.withScreen, speaker: !!e, energy: true };
     for (const k in extraTools) avail[k] = extraTools[k]();
     if (!shp.classList.contains('hidden')) drawShape();
     toolbox.style.display = toolsOn ? '' : 'none';

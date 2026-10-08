@@ -1,14 +1,14 @@
-import { CONFIG } from '../config.js?v=202610071442';
-import { state, params } from '../state.js?v=202610071442';
-import { view } from '../view.js?v=202610071442';
-import { Spring } from './springs.js?v=202610071442';
-import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, markerShader, densityShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610071442';
-import { gbufferShader, edgeShader } from './blockshaders.js?v=202610071442';
-import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610071442';
-import { traceStrokes } from './strokes.js?v=202610071442';
-import { generateBlueNoise } from './bluenoise.js?v=202610071442';
-import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610071442';
-import { holePattern } from '../speaker-patterns.js?v=202610071442';
+import { CONFIG, NODE_PALETTE } from '../config.js?v=202610080154';
+import { state, params } from '../state.js?v=202610080154';
+import { view } from '../view.js?v=202610080154';
+import { Spring } from './springs.js?v=202610080154';
+import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, flatBlurShader, gradientShader, markerShader, densityShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610080154';
+import { gbufferShader, edgeShader } from './blockshaders.js?v=202610080154';
+import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610080154';
+import { traceStrokes } from './strokes.js?v=202610080154';
+import { generateBlueNoise } from './bluenoise.js?v=202610080154';
+import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610080154';
+import { holePattern } from '../speaker-patterns.js?v=202610080154';
 
 const METHODS = { bayer: 0, blue: 1, split: 2 };
 
@@ -38,7 +38,10 @@ export function createBody(canvas) {
   let quality = 1;
   let frameTime = 1 / 60, qualityClock = 0;
   // (cross / cross 2 render at the screen's own pixel ratio, so their one-pixel marks stay crisp)
-  const crispView = () => params.view === 'cross' || params.view === 'cross2' || (params.view === 'dots' && params.dotStyle === 'grid');
+  // crisp views keep full resolution; flat hd 2 too at rest (its drawing is fine lines: halving it smudged them),
+  // it may only drop while it turns
+  const crispView = () => params.view === 'cross' || params.view === 'cross2' || (params.view === 'dots' && params.dotStyle === 'grid')
+    || (params.view === 'flathd2' && !params.moving && !((params.outT || 0) > 0));
   const pxr = () => Math.min(view.dpr, crispView() ? 3 : MAX_PIXEL_RATIO) * quality;
   const gl = canvas.getContext('webgl2', { antialias: false, alpha: true, premultipliedAlpha: true });
   if (!gl) throw new Error('WebGL2 is not available');
@@ -68,6 +71,35 @@ export function createBody(canvas) {
   const dots = lazy(dotShader);
   const cloud = lazy(cloudShader);
   const flat = lazy(flatShader);
+  const flatBlur = lazy(flatBlurShader);
+  const gradV = lazy(gradientShader);
+  let gradT = 0;   // the gradient view's own clock
+  // flat hd 2 with blur: the sharp layer and the inside layer (MRT), and one for the first blur pass
+  const flatSplit = (() => {
+    const mk = () => {
+      const t = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+      return t;
+    };
+    const over = mk(), inner = mk(), tmp = mk(), fbo = gl.createFramebuffer(), fboTmp = gl.createFramebuffer();
+    let w = 0, h = 0;
+    return {
+      over, inner, tmp, fbo, fboTmp,
+      resize(W, H) {
+        if (W === w && H === h) return;
+        w = W; h = H;
+        for (const t of [over, inner, tmp]) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, over, 0);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, inner, 0);
+        gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fboTmp);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tmp, 0);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      },
+    };
+  })();
   const pixel = lazy(pixelShader);
   const pixelD = lazy(pixelDrawShader);
   const pixel2 = lazy(pixel2Shader);
@@ -143,6 +175,7 @@ export function createBody(canvas) {
   if (document.body.dataset.page === 'cross') {
     for (const q of Object.values(WARM)) q.warm();   // at once: they are needed now
     setTimeout(() => crossHv.outer.warm(), 4000);   // then the outside, quietly, before anyone asks for it
+    setTimeout(() => { flat.warm(); flat2g.warm(); }, 6000);   // and flat hd 2, the page's other view
   }
   setTimeout(() => {
     // hand them all to the driver at once (it compiles on its own threads), then just watch
@@ -157,18 +190,20 @@ export function createBody(canvas) {
   const g2target = createTarget(gl); // a second full-res g-buffer (density: part outlines)
   let densA = createTarget(gl), densB = createTarget(gl), densFresh = true;   // density field, ping-pong (fluid memory)
   // cross-fade weight of each view (1 = fully shown)
-  const VIEWS = ['dots', 'blocks', 'flat', 'flat2', 'pixel', 'pixel2', 'empty', 'blob', 'orbital', 'pixel3d', 'glass', 'sketch', 'flathd', 'flathd2', 'milk', 'live', 'cross', 'cross2', 'marker', 'density', 'particles', 'picasso'];
+  const VIEWS = ['dots', 'blocks', 'flat', 'flat2', 'pixel', 'pixel2', 'empty', 'blob', 'orbital', 'pixel3d', 'glass', 'sketch', 'flathd', 'flathd2', 'milk', 'live', 'cross', 'cross2', 'marker', 'density', 'particles', 'picasso', 'gradient'];
   const weight = Object.fromEntries(VIEWS.map((v) => [v, params.view === v ? 1 : 0]));
   // view changes are redrawn, not orbited: the line views grow their drawing back around the parts,
   // the others fade back in
   const LINE_VIEWS = ['sketch', 'flathd', 'flathd2', 'cross', 'marker', 'density', 'particles', 'picasso'];
   let bound = { c: [0, 0, 0], r: 100 };
   let objCenter = null;   // centre of the object's box (parts + shape), mm
-  let densSmoke = 0;      // density: 1 while the view changes (smoke spreads), back to 0 as it condenses
+  let densSmoke = 0;
+  let densTr = 0;         // density (cross page): its transition, 0 at rest … 1 while turning      // density: 1 while the view changes (smoke spreads), back to 0 as it condenses
   let lastDt = 1 / 60;
   let ptScatter = 0;      // particles: thrown about while the view changes, back in place after
   const densJelly = [];   // density: each part's halo follows its projected box on a soft spring (a jelly blob)
   let redrawSeen = params.redraw, redrawT = 1;
+  let unfT = 0;   // flat hd 2: the unfinished drawing's clock
   // flat hd: the pen strokes, traced from the g-buffer once per redraw
   const STROKE_S = 2;   // device px per stroke cell
   const strokeTex = gl.createTexture();
@@ -297,6 +332,8 @@ export function createBody(canvas) {
     ripple.t += dt;
     scan.t += dt;
     clock += dt * params.drift;
+    gradT += dt * (0.15 + 1.6 * (params.gradFlow ?? 0.4));   // gradient: the colours' flow
+    unfT += dt * 1.6 * (params.unfinishedSpeed ?? 0.4);   // flat hd 2, unfinished: how fast the gaps move
     easeK = 1 - Math.exp(-params.dotSpeed * dt);
     // cross-fade between views (~0.45 s)
     const approach = (v, goal) => v + Math.sign(goal - v) * Math.min(Math.abs(goal - v), dt / 0.45);
@@ -304,6 +341,10 @@ export function createBody(canvas) {
     if (params.redraw !== redrawSeen) { redrawSeen = params.redraw; redrawT = 0; needTrace = true; }
     else redrawT += dt;
     densSmoke = params.moving ? Math.min(1, densSmoke + dt / 0.3) : Math.max(0, densSmoke - dt / 0.35);
+    // cross page, density: the transition's amount — up as the turn starts (with the shape leaving),
+    // full while it turns, back down over a little under a second once the view has settled
+    const turningD = params.view === 'density' && (params.moving || (params.outT || 0) > 0);
+    densTr = turningD ? Math.max(densTr, params.moving ? 1 : params.outT) : Math.max(0, densTr - dt / 0.9);
     ptScatter = params.moving ? Math.min(1, ptScatter + dt / 0.25) : Math.max(0, ptScatter - dt / 0.6);
     lastDt = dt;
     if (redrawT > 1e4) redrawT = 1e4;
@@ -353,7 +394,7 @@ export function createBody(canvas) {
       kind: state.kind,
       screen: state.screenType,
       withScreen: state.withScreen,
-      screenSpot: state.screenSpot,
+      screenSpot: state.screenSpot, knobFront: state.knobFront, screenMount: state.screenMount,
       speakerLib: state.speakerLib,
       power: state.power,
       shape: state.shape,
@@ -385,7 +426,7 @@ export function createBody(canvas) {
       gl.uniform2f(u.uWR, WH ? WH.r[0] : 1e4, WH ? WH.r[1] : -1e4);
     }
     gl.uniform1f(u.uWheelZ, WH ? WH.z : 0);
-    gl.uniform1f(u.uWheelScale, WH ? WH.scale : 1);
+    gl.uniform1f(u.uWheelScale, WH ? WH.scale : state.kind === 'robot' ? state.wheelD / 90 : 1);   // (the robot: the wheels node's size)
     gl.uniform1f(u.uAxleIn, WH ? WH.axleIn : 0);
     if (u['uPartC[0]']) {
       gl.uniform3fv(u['uPartC[0]'], partC);
@@ -461,8 +502,9 @@ export function createBody(canvas) {
       grow(part.c, [0, 1, 2].map((k) => Math.abs(R[k]) * h[0] + Math.abs(R[3 + k]) * h[1] + Math.abs(R[6 + k]) * (h[2] + 7)));
     }
     if (!noWheels) {
-      grow([geo.wlx.value, geo.wly.value, 0], [16, 46, 46]);
-      grow([geo.wrx.value, geo.wry.value, 0], [16, 46, 46]);
+      const ws = state.wheelD / 90;
+      grow([geo.wlx.value, geo.wly.value, 0], [16 * ws, 46 * ws, 46 * ws]);
+      grow([geo.wrx.value, geo.wry.value, 0], [16 * ws, 46 * ws, 46 * ws]);
     }
     if (WH) for (const w of [WH.l, WH.r]) grow([w[0], w[1], WH.z], [WH.hw + 1, WH.R + 1, WH.R + 1]);
     grow(L.neck.a, [L.neck.r, L.neck.r, L.neck.r]);
@@ -698,6 +740,9 @@ export function createBody(canvas) {
   let holeKey = null, holeN = 0;
   const ledBits = new Uint32Array(4);
   const typeColors = new Float32Array(13 * 3);
+  // the cross 'colour' style: the nodes' palette (yellow · orange · cyan · olive), one colour per kind of part
+  const nodeColors = new Float32Array(13 * 3);
+  for (const k in LIBRARY) if (NODE_PALETTE.parts[k]) nodeColors.set(hexToRgb(NODE_PALETTE.parts[k]), LIBRARY[k].type * 3);
   const pixel3dColors = new Float32Array(13 * 3);
   let pixel3dPal = -1;
   function pixel3dPalette() {
@@ -721,27 +766,56 @@ export function createBody(canvas) {
       // flat hd 2: the flat g-buffer with face classes, for the corner lines (and the strokes)
       gl.useProgram(flat2g.prog);
       gl.uniform1f(flat2g.uniforms.uFaces, 1);
-      flat2Gbuffer();
+      flat2Gbuffer(gtarget, flatBreathe());
       gl.useProgram(flat2g.prog);
       gl.uniform1f(flat2g.uniforms.uFaces, 0);
-      if (needTrace) traceNow();
+      // (also when the canvas changed size since the last trace: else the pen's map no longer matches the line)
+      if (needTrace || (lastTraceW !== size.w && !params.moving && !(params.outT > 0))) traceNow();
     }
     const u = flat.uniforms;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, size.w, size.h);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    // flat hd 2's blur slider; 'follows': the parts sharpen as the line leaves (turning), 'stays': always blurred
+    const guide = params.moving ? 1 : params.outT || 0;
+    const blurPx = animate ? (params.frost ?? 0) * (params.frostFollow ? 1 - guide : 1) * 14 * pxr() : 0;
+    const split = blurPx > 0.5;
+    if (split) {
+      // the inside parts to a layer of their own, the rest (sharp) to another: blurred and laid together below
+      flatSplit.resize(size.w, size.h);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, flatSplit.fbo);
+      gl.viewport(0, 0, size.w, size.h);
+      gl.disable(gl.BLEND);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, size.w, size.h);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    }
     gl.useProgram(flat.prog);
+    gl.uniform1f(u.uSplit, split ? 1 : 0);
+    gl.uniform1f(u.uUnfinished, animate && params.unfinished ? 1 : 0);
+    gl.uniform1f(u.uUnfT, unfT);
+    gl.uniform1f(u.uLineGrey, animate && params.flatLines === 'grey' ? 1 : 0);
+    gl.uniform1f(u.uPartsLine, animate && params.flatParts === 'outline' ? 1 : 0);
+    gl.uniform1f(u.uUnfGaps, params.unfGaps ?? 0.6);
+    gl.uniform1f(u.uUnfTwice, params.unfTwice ?? 0.5);
+    gl.uniform1f(u.uUnfHand, 1.2 * (params.unfHand ?? 0.38));
+    gl.uniform1f(u.uAlive, animate ? params.flatAlive ?? 0.4 : 0);
     gl.uniform1f(u.uTime, clock);
     sceneUniforms(u);
     const [mx, my] = view.toMm(mouse.x, mouse.y);
     gl.uniform2f(u.uMouse, mx, my);
     gl.uniform1f(u.uMouseAmt, Math.max(0, mouse.amt.value));
     gl.uniform1f(u.uReach, params.reach);
-    gl.uniform1f(u.uBreathe, params.breathe);
+    gl.uniform1f(u.uBreathe, animate ? flatBreathe() : params.breathe);   // (flat hd 2: the 'alive' slider)
     gl.uniform1f(u.uAlpha, alpha);
     gl.uniform1f(u.uSketch, sketch);
     gl.uniform1f(u.uAnim, animate ? 1 : 0);
+    gl.uniform1f(u.uOutT, animate ? params.outT || 0 : 0);   // flat hd 2: the drag began, the contour un-draws
+    gl.uniform1f(u.uGuide, animate ? (params.moving ? 1 : params.outT || 0) : 0);   // …and turns into a grey pencil line
+    gl.uniform1f(u.uGuideW, pxr());
+    gl.uniform1f(u.uInsideA, animate ? params.flatInside ?? 1 : 1);
+    gl.uniform1f(u.uOutsideA, animate ? params.flatOutside ?? 1 : 1);
     bindTex(0, gtarget.tex, u.uG);
     gl.uniform1f(u.uLineW, Math.max(1, 1.1 * pxr()));
     redrawUniforms(u);
@@ -753,13 +827,38 @@ export function createBody(canvas) {
     gl.uniform3fv(u.uFBlue, hexToRgb(F.blue));
     gl.uniform3fv(u.uFGreen, hexToRgb(F.green));
     gl.uniform3fv(u.uFOrange, hexToRgb(F.orange));
+    gl.uniform3fv(u.uHiCol, params.highlightColour ? hexToRgb(params.highlightColour) : [0, 0, 0]);
     if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], typeColors);
     gl.bindVertexArray(flat.quad);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+    if (split) {
+      const b = flatBlur.uniforms;
+      gl.useProgram(flatBlur.prog);
+      gl.uniform1f(b.uR, blurPx);
+      // across, into the spare layer
+      gl.bindFramebuffer(gl.FRAMEBUFFER, flatSplit.fboTmp);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      bindTex(0, flatSplit.inner, b.uTex);
+      bindTex(1, flatSplit.over, b.uOver);
+      gl.uniform2f(b.uDir, 1, 0);
+      gl.uniform1f(b.uFinal, 0);
+      gl.bindVertexArray(flatBlur.quad);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      // down, onto the screen, with the sharp layer on top
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      bindTex(0, flatSplit.tmp, b.uTex);
+      gl.uniform2f(b.uDir, 0, 1);
+      gl.uniform1f(b.uFinal, 1);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
   }
 
   /** Flat 2: what is seen (ids + depths) into the g-buffer, then fills and clean lines. */
-  function flat2Gbuffer(into = gtarget) {
+  /** Flat hd 2: how much the shape breathes ('still ↔ alive': from barely to clearly). */
+  const flatBreathe = () => params.breathe * (0.25 + 3.75 * (params.flatAlive ?? 0.4));
+  function flat2Gbuffer(into = gtarget, breathe = params.breathe) {
     const u = flat2g.uniforms;
     gl.bindFramebuffer(gl.FRAMEBUFFER, into.fbo);
     gl.viewport(0, 0, size.w, size.h);
@@ -773,7 +872,7 @@ export function createBody(canvas) {
     gl.uniform2f(u.uMouse, mx, my);
     gl.uniform1f(u.uMouseAmt, Math.max(0, mouse.amt.value));
     gl.uniform1f(u.uReach, params.reach);
-    gl.uniform1f(u.uBreathe, params.breathe);
+    gl.uniform1f(u.uBreathe, breathe);
     gl.uniform1f(u.uNear, CONFIG.camera.distance - 320);
     gl.uniform1f(u.uFar, CONFIG.camera.distance + 320);
     gl.bindVertexArray(flat2g.quad);
@@ -1263,17 +1362,35 @@ export function createBody(canvas) {
     gl.uniform1f(u.uCellPx, cell);
     gl.uniform2f(u.uGridOff, off[0], off[1]);
     // the transition: the smoke spreads out (wider halo, fewer bands, more haze), then condenses back
-    const sm = densSmoke * densSmoke * (3 - 2 * densSmoke);
-    gl.uniform1f(u.uSigma, D.spreadMm * (1 + 0.3 * sm) * view.scale * pxr());
+    const crossPage = document.body.dataset.page === 'cross';
+    const sm = crossPage ? 0 : densSmoke * densSmoke * (3 - 2 * densSmoke);   // (the cross page has its own transitions)
+    const trMode = ['condense', 'evaporate', 'liquid'].indexOf(params.densTrans ?? 'condense');
+    const tr = crossPage ? densTr : 0;
+    const soft = (params.densStyle ?? 'bands') === 'soft';
+    // the soft ball: the softness slider spreads it (a rounder, softer ball)
+    gl.uniform1f(u.uSigma, D.spreadMm * (1 + 0.3 * sm) * (1 + (trMode === 1 ? 1.4 * tr : 0)) * (soft ? 0.8 + 1.8 * (params.densSoft ?? 0.5) : 1) * view.scale * pxr());
+    gl.uniform1f(u.uTr, tr);
+    gl.uniform1i(u.uTrMode, Math.max(0, trMode));
+    gl.uniform1i(u.uStyle, soft ? 1 : 0);
+    // (condense / evaporate: as the ball goes, the parts come forward)
+    gl.uniform1f(u.uInsideA, (params.densInside ?? 0) + (trMode < 2 ? (1 - (params.densInside ?? 0)) * tr : 0));
+    gl.uniform1f(u.uFrost, params.densFrost ?? 0);
+    gl.uniform1f(u.uGlow, params.densGlow ?? 0);
+    gl.uniform1f(u.uDGrain, params.densGrain ?? 1);
+    gl.uniform1f(u.uDEdge, params.densEdge ?? 0.47);
+    gl.uniform1f(u.uDiverge, document.body.dataset.page === 'cross' ? params.densDiverge ?? 0.3 : -1);   // (the main page: as before)
+    if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], typeColors);
+    gl.uniform1f(u.uOutsideA, params.densOutside ?? 0);
     gl.uniform1f(u.uHaze, 0.3 + 0.35 * sm);
     gl.uniform1f(u.uMotion, params.densMotion);
-    const ramp = D.palettes[D.palette % D.palettes.length];
+    const ramp = D.palettes[(params.densPalette ?? D.palette) % D.palettes.length];
     if (u['uRamp[0]']) gl.uniform3fv(u['uRamp[0]'], new Float32Array(ramp.flatMap(hexToRgb)));
     gl.uniform1f(u.uLevels, (ramp.length - 1) * (1 - 0.2 * sm));
     gl.uniform1i(u.uPass, 0);
     bindTex(2, densA.tex, u.uPrev);
     // memory: settles fast at rest, flows slowly (liquid) while the view changes
-    const rate = params.moving ? 3.2 : 16;   // flows while the view changes, settles quickly once it has arrived
+    // flows while the view changes, settles quickly once it has arrived (liquid: lags behind, settles slowly)
+    const rate = crossPage && trMode === 2 ? (params.moving ? 1.1 : densTr > 0 ? 3.5 : 16) : params.moving ? 3.2 : 16;
     gl.uniform1f(u.uK, densFresh ? 1 : 1 - Math.exp(-rate * lastDt));
     densFresh = false;
     gl.bindVertexArray(densV.quad);
@@ -1502,7 +1619,7 @@ export function createBody(canvas) {
           gl.uniform1f(u.uCellPx, cell * hs);
           gl.uniform2f(u.uGridOff, off[0] * hs, off[1] * hs);
           gl.uniform2f(u.uCellRange, CONFIG.camera.distance - 320, CONFIG.camera.distance + 320);
-          if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], typeColors);
+          if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], nodeColors);   // ('colour' style: the node palette)
           const camD = Math.hypot(...[0, 1, 2].map((k) => cam.pos[k] - bound.c[k]));
           gl.uniform2f(u.uDepthRange, camD - bound.r, camD + bound.r);
           gl.bindVertexArray(crossH.quad);
@@ -1583,6 +1700,31 @@ export function createBody(canvas) {
     gl.uniform3fv(u.uBlobWheel, hexToRgb(Bc.wheel));
     gl.uniform3fv(u.uBlobKnob, hexToRgb(Bc.knob));
     gl.bindVertexArray(blob.quad);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  /** Gradient: the object as a soft blob, grainy flowing colours, a flat coloured page. */
+  function renderGradient(alpha) {
+    const u = gradV.uniforms;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, size.w, size.h);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(gradV.prog);
+    gl.uniform1f(u.uTime, clock);
+    sceneUniforms(u);
+    gl.uniform1f(u.uAlpha, alpha);
+    const G = CONFIG.gradient.palettes[(params.gradPalette ?? 0) % CONFIG.gradient.palettes.length];
+    gl.uniform3fv(u.uBg, hexToRgb(G[0]));
+    if (u['uPal[0]']) gl.uniform3fv(u['uPal[0]'], new Float32Array(G.slice(1).flatMap(hexToRgb)));
+    gl.uniform1f(u.uBgOn, params.gradPage === false ? 0 : 1);
+    gl.uniform1f(u.uInflate, 4 + 10 * (params.gradRound ?? 0.5));
+    gl.uniform1f(u.uRound, params.gradRound ?? 0.5);
+    gl.uniform1f(u.uWobble, params.gradWobble ?? 0.35);
+    gl.uniform1f(u.uGrain, params.gradGrain ?? 0.6);
+    gl.uniform1f(u.uOutsideA, params.gradOutside ?? 1);
+    gl.uniform1f(u.uFT, gradT);
+    gl.bindVertexArray(gradV.quad);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
@@ -1777,6 +1919,7 @@ export function createBody(canvas) {
     if (weight.particles > 0.01) renderParticles(weight.particles);
     if (weight.picasso > 0.01) renderPicasso(weight.picasso);
     if (weight.blob > 0.01) renderBlob(weight.blob);
+    if (weight.gradient > 0.01) renderGradient(weight.gradient);
   }
 
   return {

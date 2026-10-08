@@ -1,6 +1,6 @@
-import { CONFIG } from '../config.js?v=202610071442';
-import { state, onChange } from '../state.js?v=202610071442';
-import { layoutParts } from '../parts.js?v=202610071442';
+import { CONFIG } from '../config.js?v=202610080154';
+import { state, onChange } from '../state.js?v=202610080154';
+import { layoutParts } from '../parts.js?v=202610080154';
 
 /**
  * CPU mirror of the shader's surface — used to place add-ons on the object
@@ -50,12 +50,12 @@ function sdOrientedBox(p, c, h, R) {
 /** Current part layout from the raw state, cached until the state changes. */
 let cachedLayout = null;
 onChange(() => (cachedLayout = null));
-function currentLayout() {
+export function currentLayout() {
   return (cachedLayout ??= layoutParts({
     kind: state.kind,
     screen: state.screenType,
     withScreen: state.withScreen,
-    screenSpot: state.screenSpot,
+    screenSpot: state.screenSpot, knobFront: state.knobFront, screenMount: state.screenMount,
     speakerLib: state.speakerLib,
     power: state.power,
     shape: state.shape,
@@ -78,7 +78,7 @@ function currentLayout() {
 /** Case 2 primitive: where the add-ons go when there are `knobCount` knobs (null on the free skin). */
 export function shapeSpots(knobCount) {
   const L = layoutParts({
-    kind: state.kind, screen: state.screenType, withScreen: state.withScreen, screenSpot: state.screenSpot, speakerLib: state.speakerLib, power: state.power, shape: state.shape, totem: state.totem, stretch: state.stretch, moves: state.moves, wheelD: state.wheelD, wheelSpread: state.wheelSpread, knobCount,
+    kind: state.kind, screen: state.screenType, withScreen: state.withScreen, screenSpot: state.screenSpot, knobFront: state.knobFront, screenMount: state.screenMount, speakerLib: state.speakerLib, power: state.power, shape: state.shape, totem: state.totem, stretch: state.stretch, moves: state.moves, wheelD: state.wheelD, wheelSpread: state.wheelSpread, knobCount,
     wl: [state.wheels.left.x, state.wheels.left.y], wr: [state.wheels.right.x, state.wheels.right.y],
     scr: [state.screen.x, state.screen.y], pad: state.body.padding, neckR: state.body.neckR,
     extras: [], wheelHalfW: CONFIG.wheel.w / 2, screenHalfH: CONFIG.screen.h / 2,
@@ -211,7 +211,7 @@ export function snapRay(o, d, snapR, plane) {
 }
 
 /** Re-find the surface near a mounted point (after the body changed shape). */
-export function resnap(p, n) {
+export function resnap(p, n, strict = false) {
   const start = add(p, mul(n, 30));
   let t = 0;
   for (let i = 0; i < 80 && t < 90; i++) {
@@ -223,6 +223,7 @@ export function resnap(p, n) {
     }
     t += Math.max(dist * 0.9, 0.3);
   }
+  if (strict) return null;
   // fell off (e.g. the body shrank away): settle onto whatever is closest
   const hp = settle(p);
   return { p: hp, n: normalAt(hp) };

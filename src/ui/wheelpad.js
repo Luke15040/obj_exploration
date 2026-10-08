@@ -1,4 +1,4 @@
-import { state, setWheelD } from '../state.js?v=202610071442';
+import { state, setWheelD } from '../state.js?v=202610080154';
 
 const MIN = 64, MAX = 130;   // (below 64 mm the wheels can't reach past the servos to the floor)   // wheel diameter range, mm
 
@@ -17,8 +17,6 @@ export function createWheelPad({ onChange = () => {}, layout = () => null } = {}
       </svg>
       <input type="range" min="${MIN}" max="${MAX}" step="1" aria-label="wheel diameter">
       <div class="value"><span class="k">diameter</span><span class="v"></span></div>
-      <div class="value tight"><span class="k">track</span><span class="vtrack"></span></div>
-      <div class="value tight minrow" hidden><span class="k">min for this shape</span><span class="vmin"></span></div>
     </div>`;
   document.body.appendChild(node);
   const range = node.querySelector('input');
@@ -29,11 +27,7 @@ export function createWheelPad({ onChange = () => {}, layout = () => null } = {}
     const minD = layout()?.wheels?.minD ?? 0;
     const D = Math.max(state.wheelD, minD), r = D / 4;   // 1 unit = 4 mm
     const tooSmall = minD > state.wheelD + 0.5;
-    node.querySelector('.minrow').hidden = !(minD > MIN);
-    node.querySelector('.vmin').textContent = `Ø ${Math.round(minD)} mm`;
     node.classList.toggle('at-min', tooSmall);
-    const W = layout()?.wheels;
-    node.querySelector('.vtrack').textContent = W ? `${Math.round(W.r[0] - W.l[0])} mm · drag a wheel` : '–';
     node.querySelector('.tyre').setAttribute('r', r);
     node.querySelector('.rim').setAttribute('r', r * 0.7);
     node.querySelector('.hub').setAttribute('r', Math.max(1.5, r * 0.18));

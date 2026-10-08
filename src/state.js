@@ -1,5 +1,5 @@
-import { CONFIG, SCREENS } from './config.js?v=202610071442';
-import { layoutParts, LIBRARY, CABLES, minHalfTrack } from './parts.js?v=202610071442';
+import { CONFIG, SCREENS } from './config.js?v=202610080154';
+import { layoutParts, LIBRARY, CABLES, minHalfTrack } from './parts.js?v=202610080154';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -21,6 +21,9 @@ export const state = {
   wheelD: 90,              // case 2: wheel diameter (mm), the wheels node
   wheelSpread: 0,          // case 2: how much further out both wheels sit (mm), dragged on a wheel
   stretch: [1, 1],         // stretch node: the skin stretched in x (width) and y (height), 1 = as fitted
+  screenMount: null,       // case 2: where the screen was dragged to ({ p, n } on the surface); null = placed by the prompts
+  knobFront: false,        // case 2: the main knob (bass / volume as the main feature) on the front, under the speaker
+  mainKnob: null,          // which knob prompt is the main feature ('bass' | 'volume'), if one is
   screenSpot: 'top',       // case 2: where the screen sits around the speaker (top · bottom · left · right)
   // LED matrix 13 × 9: which LEDs are on, row by row from the top (starts as a quiet face)
   leds: Array.from({ length: 117 }, (_, i) => {
@@ -54,6 +57,24 @@ export const params = {
   crossAnim: 'scatter', // cross transition style: 'scatter' (shrink) | 'pop' | 'flicker' (also 'wipe' | 'ripple' | 'cut')
   densMotion: 0.35, // density: how much the shape keeps moving at rest (0 still … 1 lively)
   densLines: { object: true, parts: true },
+  densStyle: 'bands',   // density: 'bands' (contour map) or 'soft' (a soft ball; the cross page starts with it)
+  densSoft: 0.5,        // density, soft ball: how soft / round
+  densInside: 0,        // density: the parts seen through it (0 = hidden)
+  densOutside: 0,       // density: knob caps, holes, the screen's face on top (the cross page starts at 1)
+  densPalette: 0,
+  densFrost: 0.5,
+  densDiverge: 0.3,
+  gradPalette: 0,       // gradient view: which palette (config.js gradient.palettes)
+  gradPage: true,       // …paint its page colour
+  gradGrain: 0.45,       // …film grain where the colours meet
+  gradFlow: 0.4,        // …how fast the colours flow
+  gradWobble: 0.35,     // …how far the blob strays from the shape
+  gradRound: 0.5,       // …how round / swollen
+  gradOutside: 1,       // …knob caps, screen, holes printed on it
+  densGlow: 0,
+  densTrans: 'condense', // density (cross page): what the ball does while the object turns: condense · evaporate · liquid
+  densGrain: 1,         // density, soft ball: grainy (1, as it was) … smooth (0)
+  densEdge: 0.47,       // …its edge: crisp (0) … hazy (1); 0.47 = as it was          // density, soft ball: lit from above like coloured glass (0 = flat)     // density (cross page): how far the moving shape strays from the real one       // density: the inside, frosted (blurred) behind the ball       // density: which ramp (config.js density.palettes)
   gridShow: { outline: false, lines: false, hifi: false, lineW: 1 },
   lightAz: -45,     // lab · dots grid: light direction around the object (deg; 0 = from the front)
   lightEl: 40,      // … and its height (deg; 0 grazing, 90 from straight above)
@@ -74,6 +95,16 @@ export const params = {
   frostFollow: true, // cross: the frost leaves with the tiles and comes back with them, pixel by pixel
   voxels: 0.13,     // cross: share of the shape's cells left on screen as voxels while the view changes
   insideOpacity: 0.79, // cross: how much the parts inside the shape show (0 = hidden by the skin)
+  flatLines: 'colour',  // flat hd 2: the lines' colour — 'colour' (crayons) or 'grey' (pencil)
+  flatParts: 'fill',    // flat hd 2: the parts — 'fill' or 'outline' (the same pencil as the shape)
+  flatAlive: 0.4,       // flat hd 2: still (0) … alive (1) — the shape breathes, the line trembles
+  unfinished: false,   // flat hd 2: the drawing left unfinished (gaps in its lines); the cross page starts with it
+  unfGaps: 0.6,         // …how many strokes are missing
+  unfTwice: 0.5,        // …how many are gone over twice
+  unfHand: 0.38,        // …how much the hand trembles
+  unfinishedSpeed: 0.4, // …how fast its gaps move (0 = still)
+  flatInside: 1,       // flat hd 2: the same two, its own values (both full)
+  flatOutside: 1,
   outsideOpacity: 0.76, // cross: how much the outside shows: knob caps, speaker holes, the screen's face
   shimmer: 2.15,    // cross: how much the shape at rest breathes (mm), so its cells blink like a mirage
   voxShimmer: 0.2,  // cross: how much the voxels pulse while the object is turned (0 still … 1 they blink out and back)
@@ -163,6 +194,9 @@ export function setLed(i, on) { state.leds[i] = on; }
 export function setWithScreen(on) { state.withScreen = on; emit(); }
 
 /** Case 2: move the screen to another spot around the speaker. */
+/** Case 2: the screen dragged onto the surface (p on the skin, n its face's outward normal); null = back to the prompts' choice. */
+export function setScreenMount(m) { state.screenMount = m; emit(); }
+
 export function setScreenSpot(spot) { if (spot !== state.screenSpot) { state.screenSpot = spot; emit(); } }
 
 /** Energy source: battery or wall power. */
@@ -227,6 +261,7 @@ export function addExtra(type, p, n) {
 export function updateExtra(id, patch) {
   const e = state.extras.find((x) => x.id === id);
   if (!e) return;
+  if (patch.p && !('anchor' in patch)) e.anchor = undefined;   // moved somewhere else (a drag): no longer anchored
   Object.assign(e, patch);
   if (patch.n) e.n = mountNormal(patch.n);
   emit();
@@ -322,7 +357,7 @@ export function snapshot() {
         kind: state.kind,
         screen: state.screenType,
         withScreen: state.withScreen,
-        screenSpot: state.screenSpot,
+        screenSpot: state.screenSpot, knobFront: state.knobFront, screenMount: state.screenMount,
         speakerLib: state.speakerLib,
         power: state.power,
         shape: state.shape,

@@ -85,6 +85,17 @@ export const CONFIG = {
       ['#f8f1e8', '#f0dcc2', '#e6c095', '#d79f6b', '#bd7c4b', '#985c36', '#6e4129', '#47291b'],   // sand → umber
       ['#edf6f5', '#d0ebe7', '#a9d8d1', '#7fbfb6', '#579f98', '#3c7f7a', '#2a605d', '#1a3f3e'],   // mint → deep teal
       ['#fbefe9', '#f6d3c6', '#efb09b', '#e48a72', '#cf6551', '#ab4a3d', '#80342d', '#55211e'],   // peach → brick
+      ['#f3f2f0', '#e2e0dc', '#cbc8c3', '#aeaaa4', '#8e8a84', '#6e6a65', '#4f4c48', '#33312e'],   // grey: paper → graphite
+    ],
+  },
+
+  /** gradient view (cross page): grainy colour patches on a soft blob, on a flat page; [page, 5 patch colours] */
+  gradient: {
+    palettes: [
+      ['#fbd9ef', '#a99af0', '#ff5f4f', '#ffbf47', '#ffffff', '#f6a6c8'],   // candy: pink page, lilac · red · amber · white · rose
+      ['#5b82ff', '#ffd1ee', '#ff9a3d', '#8f8cf2', '#ff6f8e', '#fff2fb'],   // sky: blue page, pink · orange · lilac · coral · white
+      ['#d7f2e6', '#7fd8c2', '#ffd66b', '#ff8a7a', '#6c8cff', '#ffffff'],   // mint: mint page, teal · yellow · salmon · blue · white
+      ['#1a1a1f', '#ff7ac6', '#7b6cff', '#ffc94d', '#45e0c8', '#ffffff'],   // night: dark page, magenta · violet · gold · aqua · white
     ],
   },
 
@@ -130,6 +141,7 @@ export const CONFIG = {
     snap: {
       freeYaw: 0.35, freePitch: 0.3, freeMin: -10,   // cross: free turn, degrees per px · lowest pitch
       turnOut: 0.22,      // cross: s for the tiles to shrink away when a free turn starts
+      turnOutFlat: 0.6,   // flat hd 2: s for the contour to un-draw itself (along the pen's path) when a free turn starts
       yaw: 45,            // step between elevation and axonometric
       axo: 35,            // pitch of the axonometric views
       top: 89.5,          // pitch of the plan view
@@ -256,6 +268,22 @@ export const CONFIG = {
         qtHub: '#4a4a4f',
       },
     },
+  },
+};
+
+/**
+ * The nodes' palette (yellow · orange · cyan · olive): the colour a node and its part light up in,
+ * and the cross view's 'colour' style — every part in the same family, the node parts in exactly theirs.
+ */
+export const NODE_PALETTE = {
+  nodes: { screen: '#ff8c55', speaker: '#e7e96c', energy: '#a0e0e0', wheels: '#8b8f63' },
+  parts: {
+    matrix: '#ff8c55', oled: '#ff8c55',                    // screen · orange
+    speaker: '#e7e96c', speakerSmall: '#e7e96c',           // speaker · yellow
+    battery: '#a0e0e0', pdTrigger: '#a0e0e0',              // energy · cyan
+    servo: '#8b8f63',                                      // wheels · olive
+    piZero: '#a6aa7c', feather: '#a6aa7c', respeaker: '#6f7350', qtHub: '#5c6045', servoAdapter: '#7c8058',   // the rest: olives
+    encoder: '#c6a3e0', buck: '#7cc6c6',                   // knobs: lilac (their own, not the speaker's yellow) · a deeper cyan
   },
 };
 

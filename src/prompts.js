@@ -1,9 +1,9 @@
-import { CONFIG } from './config.js?v=202610071442';
-import { state, params, setPose, getPose, setShape, setKind, setShape2, updateExtra, setWithScreen, setMoves } from './state.js?v=202610071442';
-import { SHAPES, TOTEM_POOL, TOTEM_BASE, FREE_SLOTS, freeKnobSpots } from './parts.js?v=202610071442';
-import { frontPoint, shapeSpots, stretchPoint } from './body/sdf.js?v=202610071442';
-import { view } from './view.js?v=202610071442';
-import { createBlockPrompt } from './ui/blocks.js?v=202610071442';
+import { CONFIG } from './config.js?v=202610080154';
+import { state, params, setPose, getPose, setShape, setKind, setShape2, updateExtra, setWithScreen, setMoves, setScreenType, setScreenSpot } from './state.js?v=202610080154';
+import { SHAPES, TOTEM_POOL, TOTEM_BASE, FREE_SLOTS, freeKnobSpots } from './parts.js?v=202610080154';
+import { frontPoint, shapeSpots, stretchPoint, snapRay } from './body/sdf.js?v=202610080154';
+import { view } from './view.js?v=202610080154';
+import { createBlockPrompt } from './ui/blocks.js?v=202610080154';
 
 /**
  * Guided prompts: a few canned "prompts" that reshape the object, standing in
@@ -64,6 +64,14 @@ const ROBOT = [
     ],
   },
   {
+    id: 'face',
+    prompt: 'i want it to have a face',
+    block: 'has a face', glyph: 'dot', blockOnly: true,
+    steps: [
+      { at: 0, face: true },
+    ],
+  },
+  {
     id: 'speak',
     prompt: 'i want this thing to speak',
     block: 'can speak', hue: 'red', glyph: 'ring',
@@ -78,6 +86,8 @@ const ROBOT = [
     reset: true,
     steps: [
       { at: 0, clear: true },
+      { at: 0, face: false, blocksOnly: true },   // (the block prompt: the face is a piece of its own)
+      { at: 0, face: true, chipsOnly: true },
       { at: 0, dur: 1000, shape: DEFAULT_SHAPE },
       { at: 150, dur: 1100, pose: DEFAULT_POSE },
     ],
@@ -95,15 +105,6 @@ const SPEAKER_BOX = [
     ],
   },
   {
-    id: 'moves',
-    prompt: 'i want it to move',
-    block: 'moves', glyph: 'semi',
-    // two servos and two wheels (their size in the wheels node)
-    steps: [
-      { at: 0, moves: true },
-    ],
-  },
-  {
     id: 'two',
     prompt: 'i want to control bass and volume',
     chipOnly: true,   // (the main page's chip; the block prompt has one piece per knob)
@@ -116,7 +117,7 @@ const SPEAKER_BOX = [
     prompt: 'i want to control the bass',
     block: 'lets me control bass', glyph: 'square', blockOnly: true,
     steps: [
-      { at: 0, add: 'knob', always: true },   // one knob each: bass and volume together make two
+      { at: 0, add: 'knob', always: true, role: 'bass' },   // one knob each: bass and volume together make two
     ],
   },
   {
@@ -124,7 +125,7 @@ const SPEAKER_BOX = [
     prompt: 'i want to control the volume',
     block: 'lets me control volume', glyph: 'triangle', blockOnly: true,
     steps: [
-      { at: 0, add: 'knob', always: true },
+      { at: 0, add: 'knob', always: true, role: 'volume' },
     ],
   },
   {
@@ -212,23 +213,42 @@ export function createPrompts({ extras, body, nodes }) {
 
   /** Every add-on to its spot: chosen by the primitive itself, or the free skin's front spots. */
   function placeAll() {
-    const nk = state.extras.filter((e) => e.type === 'knob').length;
+    const knobs = state.extras.filter((e) => e.type === 'knob');
+    const nk = knobs.length;
+    // the main knob (its prompt beside the root) first: it takes the front
+    const main = knobs.find((e) => e.role && e.role === state.mainKnob);
+    state.knobFront = !!main;
+    const order = main ? [main, ...knobs.filter((e) => e !== main)] : knobs;
+    const spk = state.extras.find((e) => e.type === 'speaker');
+    for (const e of knobs) if (e !== main || state.shape !== 'free') e.anchor = undefined;
     if (state.shape !== 'free') {
       const spots = shapeSpots(nk);
-      let ki = 1;
-      for (const e of state.extras) {
-        const sp = e.type === 'speaker' ? spots[0] : spots[ki++];
-        if (sp) updateExtra(e.id, { p: sp.p, n: sp.n });
-      }
+      if (!spots) return;
+      if (spk && spots[0]) updateExtra(spk.id, { p: spots[0].p, n: spots[0].n });
+      order.forEach((e, i) => { const sp = spots[1 + i]; if (sp) updateExtra(e.id, { p: sp.p, n: sp.n }); });
+      return;
+    }
+    const at = (x, y) => frontPoint(...stretchPoint(x, y));
+    if (spk) { const hit = at(...FREE_SLOTS.speaker); if (hit) updateExtra(spk.id, { p: hit.p, n: hit.n }); }
+    if (main) {
+      // the free skin: on the front, beside the speaker (where a knob has always been); the others on
+      // the sides (left first: the main one is on the right), mid-depth. (Primitives: under the speaker, parts.js)
+      const hit = at(...FREE_SLOTS.knobs[0][0]);
+      if (hit) updateExtra(main.id, { p: hit.p, n: hit.n });
+      const right = true;   // (the main knob's side: the others start on the other one)
+      order.slice(1).forEach((e, i) => {
+        const sx = (i % 2 ? -1 : 1) * (right ? -1 : 1);
+        const r = snapRay([sx * 400, -6, -24], [-sx, 0, 0], 0);
+        if (r.attached) updateExtra(e.id, { p: r.p, n: r.n });
+      });
       return;
     }
     const ks = freeKnobSpots(nk);
-    let ki = 0;
-    for (const e of state.extras) {
-      const spot = e.type === 'speaker' ? FREE_SLOTS.speaker : ks[ki++];
-      const hit = spot && frontPoint(...stretchPoint(spot[0], spot[1]));
+    order.forEach((e, i) => {
+      const spot = ks[i];
+      const hit = spot && at(spot[0], spot[1]);
       if (hit) updateExtra(e.id, { p: hit.p, n: hit.n });
-    }
+    });
   }
 
   /** Swap the whole object: clear the add-ons, switch the parts, settle into the case's defaults. */
@@ -243,6 +263,8 @@ export function createPrompts({ extras, body, nodes }) {
     state.moves = false;
     state.wheelSpread = 0;
     state.screenSpot = 'top';
+    state.mainKnob = null;
+    state.knobFront = false;
     setKind(kind);
     markCase();
     markForm();
@@ -251,8 +273,10 @@ export function createPrompts({ extras, body, nodes }) {
     body.scan(1.3);
     pulseAtObject();
     if (kind === 'robot') {
+      state.withScreen = true;   // the robot has its face (on the cross page it is the 'has a face' piece, attached)
       setShape(DEFAULT_SHAPE);
       setPose(DEFAULT_POSE);
+      if (blocks) schedule(300, () => blocks.attachById('face'));
     } else {
       setShape(BOX_SHAPE);
       // the speaker comes in once the old add-ons are gone
@@ -333,8 +357,13 @@ export function createPrompts({ extras, body, nodes }) {
         schedule(at, () => tweens.push({ t: 0, dur: s.dur, kind: 'move', type: s.move, to: s.to, from: null }));
         end = Math.max(end, at + s.dur);
       }
+      if ((s.blocksOnly && !blocks) || (s.chipsOnly && blocks)) continue;
       if (s.add && !(s.base && blocks)) {
-        schedule(at, () => { if (s.always || extras.count(s.add) === 0) extras.spawn(s.add); });
+        schedule(at, () => {
+          if (!(s.always || extras.count(s.add) === 0)) return;
+          extras.spawn(s.add);
+          if (s.role) { const e = state.extras.at(-1); if (e?.type === s.add) e.role = s.role; }   // (which prompt it answers)
+        });
         if (state.kind === 'speaker') schedule(at + 120, placeAll);
         end = Math.max(end, at + 900);
       }
@@ -437,13 +466,35 @@ export function createPrompts({ extras, body, nodes }) {
     for (const q of list) at = play(q.steps, at) + 120;
     finish(at);
   }
+  /**
+   * Prompt hierarchy: the prompt in line with the root is the main feature, and it shapes the object.
+   * The face is always on the front: as the main feature the big matrix, otherwise a small OLED.
+   * A knob as the main feature ('lets me control bass / volume'): that knob on the front too, centred
+   * under the speaker; the other knob on a side.
+   * No knob in line: the knobs as always (symmetric).
+   */
+  function applyMain(p) {
+    const faceMain = !p || p.id === 'face';
+    const knobMain = p && (p.id === 'bass' || p.id === 'volume') ? p.id : null;
+    const type = faceMain ? 'matrix' : 'oled';
+    const spot = 'top';   // the face is always on the front (main: the big matrix; otherwise the small OLED)
+    if (type === state.screenType && spot === state.screenSpot && knobMain === state.mainKnob && !state.screenMount) return;
+    state.mainKnob = knobMain;
+    state.screenMount = null;   // the hierarchy changed: the prompts place it again
+    setScreenType(type);
+    setScreenSpot(spot);
+    if (state.kind === 'speaker') { schedule(60, placeAll); schedule(400, placeAll); }   // (again once the shape has settled)
+    body.scan(0.8);
+  }
   const blocks = document.body.dataset.page === 'cross'
     ? createBlockPrompt({
       presets: () => PRESETS[state.kind].filter((q) => !q.reset && !q.chipOnly),
       onAttach: attachBlock,
       onChange: recompose,
+      onFocus: applyMain,
       onReset: () => run(PRESETS[state.kind].find((q) => q.reset)),
       grid: () => body.dotGrid(),
+      head: () => (state.kind === 'robot' ? 'a moving thing that' : 'a speaking thing that'),
     })
     : null;
 

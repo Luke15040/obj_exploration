@@ -1,8 +1,9 @@
-import { CONFIG } from '../config.js?v=202610071442';
-import { state } from '../state.js?v=202610071442';
-import { screenSlotFor } from '../parts.js?v=202610071442';
-import { view } from '../view.js?v=202610071442';
-import { pathOf, segsOf, hull, cylinderLines, circle3, boxLines } from './wire.js?v=202610071442';
+import { CONFIG } from '../config.js?v=202610080154';
+import { state } from '../state.js?v=202610080154';
+import { currentLayout } from '../body/sdf.js?v=202610080154';
+import { screenSlotFor } from '../parts.js?v=202610080154';
+import { view } from '../view.js?v=202610080154';
+import { pathOf, segsOf, hull, cylinderLines, circle3, boxLines } from './wire.js?v=202610080154';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -103,13 +104,27 @@ export function createComponents(svg) {
     const sp = parts.screen;
     // case 2: the screen can be grabbed too (it snaps between its spots around the speaker)
     const grab2 = state.kind === 'speaker' && state.withScreen && state.shape !== 'totem';
-    sp.g.style.display = state.kind === 'speaker' && !grab2 ? 'none' : '';
-    const sc = grab2 ? screenSlotFor(state.screenSpot, state.speakerLib, state.screenType) : [state.screen.x, state.screen.y, 0];
-    const B = boxLines([sc[0], sc[1], 0], [S.w / 2, S.h / 2, S.d / 2], S.display);
-    sp.main.setAttribute('d', segsOf(B.shown));
-    sp.hidden.setAttribute('d', segsOf(B.hidden));
-    sp.soft.setAttribute('d', B.disp ? pathOf(B.disp, true) : '');
-    annotate(sp, B.pts, B.center, grab2 ? 0 : state.screen.x - I.screenX, grab2 ? 0 : state.screen.y - I.screenY);
+    sp.g.style.display = (state.kind === 'speaker' && !grab2) || (state.kind === 'robot' && !state.withScreen) ? 'none' : '';
+    const mx = grab2 ? currentLayout().parts.find((p) => p.key === 'matrix') : null;
+    if (mx) {
+      // case 2: the real screen part (it can face any way): its turned box, projected
+      const pts = Array.from({ length: 8 }, (_, i) => {
+        const l = [i & 1 ? mx.h[0] : -mx.h[0], i & 2 ? mx.h[1] : -mx.h[1], i & 4 ? mx.h[2] : -mx.h[2]];
+        const R = mx.R;
+        return view.project(...[0, 1, 2].map((k) => mx.c[k] + R[k] * l[0] + R[3 + k] * l[1] + R[6 + k] * l[2]));
+      });
+      sp.main.setAttribute('d', pathOf(hull(pts), true));
+      sp.hidden.setAttribute('d', '');
+      sp.soft.setAttribute('d', '');
+      annotate(sp, pts, view.project(...mx.c), 0, 0);
+    } else {
+      const sc = grab2 ? screenSlotFor(state.screenSpot, state.speakerLib, state.screenType) : [state.screen.x, state.screen.y, 0];
+      const B = boxLines([sc[0], sc[1], 0], [S.w / 2, S.h / 2, S.d / 2], S.display);
+      sp.main.setAttribute('d', segsOf(B.shown));
+      sp.hidden.setAttribute('d', segsOf(B.hidden));
+      sp.soft.setAttribute('d', B.disp ? pathOf(B.disp, true) : '');
+      annotate(sp, B.pts, B.center, grab2 ? 0 : state.screen.x - I.screenX, grab2 ? 0 : state.screen.y - I.screenY);
+    }
 
     renderGuides();
   }

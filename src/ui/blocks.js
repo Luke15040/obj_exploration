@@ -1,5 +1,5 @@
-import { CONFIG } from '../config.js?v=202610071442';
-import { params } from '../state.js?v=202610071442';
+import { CONFIG } from '../config.js?v=202610080154';
+import { params } from '../state.js?v=202610080154';
 
 /**
  * The block prompt (cross page), drawn in the language of the pixel shape: every prompt is
@@ -14,7 +14,7 @@ import { params } from '../state.js?v=202610071442';
  * @param {{ presets: () => object[], onAttach: (p) => void, onChange: (list) => void,
  *           onReset: () => void, grid: () => { cell: number, ox: number, oyTop: number } }} hooks
  */
-export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid }) {
+export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid, onFocus = () => {}, head: headText = () => 'a thing that' }) {
   const canvas = document.createElement('canvas');
   canvas.id = 'promptcells';
   document.body.appendChild(canvas);
@@ -30,6 +30,9 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid }
   let pieces = [];            // { p, text, w, h, place: 'tray' | 'stack', col, row, t0, key }
   const stack = [];           // pieces in the sentence, in order
   let drag = null;            // { piece, gc, gr, col, row, near }
+  let focus = null;           // the important prompt: in line with 'a thing that' (the last attached, or the last clicked)
+  let line = null;            // the piece drawn in line right now (the focus, unless one is being dropped there)
+  let pending = null;         // pointer down on a piece, not moved yet (a click, or the start of a drag)
   const head = { text: 'a thing that', place: 'head', key: '', t0: 0 };   // the root: never moves, never leaves
   let G = { cell: 20, ox: 0, oyTop: 0 };
 
@@ -53,20 +56,32 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid }
   /** Where everything sits on the grid (stack at the top, tray at the bottom). */
   function layout() {
     const indent = Math.max(1, Math.round(14 / G.cell));
-    // the stack: 'a thing that' on top, then each prompt one indent further in, right below the previous one
+    // the sentence: 'a thing that' and the important prompt side by side on one row,
+    // the other prompts stacked above and below it (alternating), a step further in
+    if (head.text !== headText()) { head.text = headText(); textW.delete(head.text); }
     sizeOf(head);
-    let ext = head.w;
-    stack.forEach((pc, i) => { ext = Math.max(ext, (i + 1) * indent + pc.w); });
-    const slotW = drag ? drag.piece.w : 6;   // (the free place doesn't move the stack: it only reaches to the right)
-    const col0 = Math.round((window.innerWidth / 2 - G.ox) / G.cell - ext / 2);
-    let row = Math.round((70 - G.oyTop) / G.cell);
-    place(head, col0, row, 'head');
-    row += head.h;
-    stack.forEach((pc, i) => place(pc, col0 + (i + 1) * indent, row, 'stack') && (row += pc.h));
-    slot.col = col0 + (stack.length + 1) * indent;
-    slot.row = row;
-    slot.w = slotW;
-    slot.h = drag ? drag.piece.h : Math.max(1, Math.ceil(24 / G.cell));
+    // while a prompt hovers over the main place, the current main one steps down into the rest
+    const toMain = drag?.near && drag.target === 'main';
+    const cur = stack.includes(focus) ? focus : null;
+    const f = toMain ? null : cur;
+    line = f;
+    const others = toMain && cur ? [cur, ...stack.filter((pc) => pc !== cur)] : stack.filter((pc) => pc !== f);
+    const above = others.filter((_, i) => i % 2 === 1), below = others.filter((_, i) => i % 2 === 0);
+    const unit = Math.max(1, Math.ceil(24 / G.cell));
+    const slotW = drag ? drag.piece.w : 6, slotH = drag ? drag.piece.h : unit;
+    const rowW = head.w + (f ? f.w : slotW);
+    const col0 = Math.round((window.innerWidth / 2 - G.ox) / G.cell - rowW / 2);
+    const row0 = Math.round((70 - G.oyTop) / G.cell) + above.reduce((s, pc) => s + pc.h, 0);
+    place(head, col0, row0, 'head');
+    if (f) place(f, col0 + head.w, row0, 'stack');
+    let r = row0;
+    for (const pc of above) { r -= pc.h; place(pc, col0 + 2 * indent, r, 'stack'); }
+    r = row0 + head.h;
+    for (const pc of below) { place(pc, col0 + indent, r, 'stack'); r += pc.h; }
+    // two places to drop: beside the root (the main feature) and under the rest (a feature among others)
+    slots.length = 0;
+    slots.push({ kind: 'main', col: col0 + head.w, row: row0, w: f ? f.w : slotW, h: slotH, free: !f });
+    if (stack.length) slots.push({ kind: 'rest', col: col0 + indent, row: r, w: slotW, h: slotH, free: true });
     // the tray: one row, a cell apart, centred near the bottom
     const tray = pieces.filter((pc) => pc.place === 'tray' && pc !== drag?.piece);
     const all = pieces.filter((pc) => pc.place === 'tray');
@@ -80,13 +95,31 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid }
     again.style.left = `${Math.round(cellX(col) + 4)}px`;
     again.style.top = `${Math.round(cellY(trow) + G.cell / 2 - 11)}px`;
   }
-  const slot = { col: 0, row: 0, w: 6, h: 1 };
+  const slots = [];            // { kind: 'main' | 'rest', col, row, w, h, free }
   function place(pc, col, row, where) {
     const key = `${col},${row},${pc.w},${pc.h},${where}`;
-    if (key !== pc.key) { pc.key = key; pc.t0 = clock; }   // moved: build up again where it lands
+    if (key !== pc.key) {
+      // inside the sentence (or just dropped into it) a prompt slides to its new place;
+      // anything else builds up again where it lands
+      const slide = (where === 'stack' || where === 'head') && pc.px !== undefined && (pc.dropped || pc.was === where);
+      if (!slide) { pc.t0 = clock; pc.px = col; pc.py = row; }
+      pc.dropped = false;
+      pc.key = key;
+    }
+    pc.was = where;
     pc.col = col; pc.row = row; pc.place = where;
     return true;
   }
+  /** Every frame: the slide of the prompts that moved (eased, a few frames). */
+  function glide(dt) {
+    const k = 1 - Math.exp(-dt * 14);
+    for (const pc of [head, ...pieces]) {
+      if (pc.px === undefined) continue;
+      pc.px += (pc.col - pc.px) * k; pc.py += (pc.row - pc.py) * k;
+      if (Math.abs(pc.col - pc.px) < 0.02 && Math.abs(pc.row - pc.py) < 0.02) { pc.px = pc.col; pc.py = pc.row; }
+    }
+  }
+  const settled = (pc) => pc.px === pc.col && pc.py === pc.row;
 
   /** Cells of a piece at (col, row), with how far each one has grown (0..1). */
   function cellsOf(pc, col, row, built) {
@@ -190,27 +223,42 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid }
     const X = params.look === 1 ? { ...CONFIG.cross, ...CONFIG.cross.lookA } : CONFIG.cross;
     // nested like code blocks: the root dark, each prompt below it one step lighter
     const ROOT = '#5b5853', ROOT_MARK = '#d9d6d0', ROOT_INK = '#f3f1ec';
-    const TONES = [X.side, X.light, X.top];
     const alpha = busy ? 0.55 : 1;
     const glyphCells = (pc, col, row) => (pc.p?.glyph ? Array.from({ length: pc.h }, (_, j) => `${col},${row + j}`) : []);
 
     // the next free place in the stack: hatched cells (the stripes run while a prompt is near)
-    const slotCells = [];
-    for (let j = 0; j < slot.h; j++) for (let i = 0; i < slot.w; i++) slotCells.push({ c: slot.col + i, r: slot.row + j, g: 1 });
     hatch.setTransform(new DOMMatrix().translate(drag?.near ? (clock * 16) % 8 : 0, 0));
-    drawBlob(slotCells, () => hatch, dpr, drag?.near ? 0.9 : drag ? 0.6 : 0.4);
+    for (const sl of slots) {
+      if (!sl.free) continue;
+      const cells = [];
+      for (let j = 0; j < sl.h; j++) for (let i = 0; i < sl.w; i++) cells.push({ c: sl.col + i, r: sl.row + j, g: 1 });
+      const on = drag?.near && drag.target === sl.kind;
+      drawBlob(cells, () => hatch, dpr, on ? 0.9 : drag ? 0.6 : 0.4);
+    }
 
     // the stack, 'a thing that' included: one blob
     const sc = [];
     const toneOf = new Map(), skip = new Set();
-    [head, ...stack].forEach((pc, i) => {
-      cellsOf(pc, pc.col, pc.row).forEach((q) => { sc.push(q); toneOf.set(`${q.c},${q.r}`, i === 0 ? ROOT : TONES[Math.min(i - 1, 2)]); });
+    const toneFor = (pc) => (pc === head ? ROOT : pc === line ? X.light : pc.row < head.row ? X.top : X.side);
+    const moving = [head, ...stack].filter((pc) => !settled(pc));
+    [head, ...stack].filter(settled).forEach((pc) => {
+      const tone = toneFor(pc);
+      cellsOf(pc, pc.col, pc.row).forEach((q) => { sc.push(q); toneOf.set(`${q.c},${q.r}`, tone); });
       glyphCells(pc, pc.col, pc.row).forEach((k) => skip.add(k));
     });
     drawBlob(sc, (q) => toneOf.get(`${q.c},${q.r}`), dpr, alpha);
     drawMarks(sc, (q) => (toneOf.get(`${q.c},${q.r}`) === ROOT ? ROOT_MARK : X.dot), dpr, skip);
-    drawText(head, head.col, head.row, false, ROOT_INK);
-    stack.forEach((pc) => drawText(pc, pc.col, pc.row));
+    if (settled(head)) drawText(head, head.col, head.row, false, ROOT_INK);
+    stack.filter(settled).forEach((pc) => drawText(pc, pc.col, pc.row));
+    for (const pc of moving) {
+      ctx.save();
+      ctx.translate((pc.px - pc.col) * G.cell, (pc.py - pc.row) * G.cell);
+      const tone = toneFor(pc), cs = cellsOf(pc, pc.col, pc.row);
+      drawBlob(cs, () => tone, dpr, alpha);
+      drawMarks(cs, tone === ROOT ? ROOT_MARK : X.dot, dpr, new Set(glyphCells(pc, pc.col, pc.row)));
+      drawText(pc, pc.col, pc.row, false, pc === head ? ROOT_INK : INK);
+      ctx.restore();
+    }
 
     // the tray: an island each
     for (const pc of pieces) {
@@ -248,12 +296,17 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid }
     e.preventDefault();
     e.stopPropagation();            // not an orbit, not a part drag
     const [c, r] = cellAt(e.clientX, e.clientY);
-    const wasIn = stack.includes(pc);
-    if (wasIn) stack.splice(stack.indexOf(pc), 1);
-    drag = { piece: pc, gc: c - pc.col, gr: r - pc.row, col: pc.col, row: pc.row, near: false, wasIn };
-    document.documentElement.classList.add('block-dragging');
+    pending = { piece: pc, x: e.clientX, y: e.clientY, gc: c - pc.col, gr: r - pc.row };
   }, true);
   window.addEventListener('pointermove', (e) => {
+    if (pending && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 4) {
+      const { piece: pc, gc, gr } = pending;
+      pending = null;
+      const wasIn = stack.includes(pc);
+      if (wasIn) stack.splice(stack.indexOf(pc), 1);
+      drag = { piece: pc, gc, gr, col: pc.col, row: pc.row, near: false, wasIn };
+      document.documentElement.classList.add('block-dragging');
+    }
     if (!drag) {
       document.documentElement.classList.toggle('block-hover', !busy && !!hit(e.clientX, e.clientY));
       return;
@@ -262,37 +315,64 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid }
     let col = c - drag.gc, row = r - drag.gr;
     // magnetic: within a few cells of the free place it jumps in and holds
     const M = Math.max(2, Math.round(70 / G.cell));
-    drag.near = Math.abs(col - slot.col) <= M && Math.abs(row - slot.row) <= M;
-    if (drag.near) { col = slot.col; row = slot.row; }
+    let best = null, bd = Infinity;
+    for (const sl of slots) {
+      const dc = Math.abs(col - sl.col), dr = Math.abs(row - sl.row);
+      if (dc > M || dr > M) continue;
+      const d = dc + 2 * dr + (sl.kind === drag.target ? -1 : 0);   // (a little stickiness: no flicker between the two)
+      if (d < bd) { bd = d; best = sl; }
+    }
+    drag.near = !!best;
+    drag.target = best?.kind ?? null;
+    if (best) { col = best.col; row = best.row; }
     drag.col = col; drag.row = row;
   }, true);
   window.addEventListener('pointerup', () => {
+    if (pending) {                  // a click: a stacked prompt comes in line, a tray one joins
+      const pc = pending.piece;
+      pending = null;
+      if (stack.includes(pc)) { if (focus !== pc) { focus = pc; onFocus(pc.p); } }
+      else if (pc.place === 'tray' && !busy) {
+        stack.push(pc); pc.place = 'stack';
+        const was = focus;
+        if (!stack.includes(focus)) focus = pc;   // the first one is the main one; later ones join the rest
+        onAttach(pc.p);
+        if (focus !== was) onFocus(focus.p);
+      }
+      return;
+    }
     if (!drag) return;
-    const { piece: pc, near, wasIn } = drag;
+    const { piece: pc, near, wasIn, target, col: dc, row: dr } = drag;
     drag = null;
     document.documentElement.classList.remove('block-dragging');
+    const was = focus;
     if (near) {
       stack.push(pc);
       pc.place = 'stack';
+      pc.px = dc; pc.py = dr; pc.dropped = true; pc.t0 = -1e3;   // (built already: it slides in)
+      if (target === 'main' || !stack.includes(focus)) focus = pc;   // dropped beside the root: the main feature
+      else if (focus === pc) focus = stack.find((q) => q !== pc) ?? pc;   // the main one moved down to the rest: the next one steps up
       if (!wasIn) onAttach(pc.p);          // a new prompt: it plays
     } else {
       pc.place = 'tray';
+      if (focus === pc) focus = stack[0] ?? null;
       if (wasIn) onChange(stack.map((q) => q.p));   // one left the stack: recompose
     }
+    if (focus !== was || (wasIn && !near)) onFocus(focus?.p ?? null);
   }, true);
   again.addEventListener('click', () => { if (!busy) { rebuild(); onReset(); } });
 
   /** Fresh tray for the current case (every prompt back out of the stack). */
   function rebuild() {
     stack.length = 0;
-    drag = null;
+    drag = pending = focus = null;
     pieces = presets().map((p) => ({ p, text: p.block ?? p.prompt, place: 'tray', key: '', t0: clock }));
   }
   rebuild();
 
   // debug: where the prompts and the free place are, in CSS px (the canvas has no DOM to find)
   const rect = (col, row, w, h) => ({ x: cellX(col), y: cellY(row), w: w * G.cell, h: h * G.cell });
-  window.__blocks = () => ({ pieces: pieces.map((pc) => ({ text: pc.text, place: pc.place, ...rect(pc.col, pc.row, pc.w, pc.h) })), slot: rect(slot.col, slot.row, slot.w, slot.h), cell: G.cell });
+  window.__blocks = () => ({ pieces: pieces.map((pc) => ({ text: pc.text, place: pc.place, ...rect(pc.col, pc.row, pc.w, pc.h) })), slots: slots.map((sl) => ({ kind: sl.kind, free: sl.free, ...rect(sl.col, sl.row, sl.w, sl.h) })), cell: G.cell });
 
   return {
     rebuild,
@@ -302,8 +382,13 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid }
       if (!pc || busy) return;
       stack.push(pc);
       pc.place = 'stack';
+      const first = !stack.includes(focus);
+      if (first) focus = pc;
       onAttach(pc.p);
+      if (first) onFocus(pc.p);
     },
+    /** The main feature (the prompt in line with the root), or null. */
+    main: () => (stack.includes(focus) ? focus.p : null),
     setBusy(b) { busy = b; again.classList.toggle('busy', b); },
     /** Every frame (from the prompts' update): follow the grid, lay out, draw. */
     update(dt) {
@@ -313,6 +398,7 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid }
       if (g) G = g;
       for (const pc of pieces) sizeOf(pc);
       layout();
+      glide(dt);
       draw();
     },
   };

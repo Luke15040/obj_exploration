@@ -1,12 +1,12 @@
-import { CONFIG } from '../config.js?v=202610071442';
-import { state, params, onChange, addExtra, updateExtra, removeExtra, mountNormal } from '../state.js?v=202610071442';
-import { view } from '../view.js?v=202610071442';
-import { Spring } from '../body/springs.js?v=202610071442';
-import { snapRay, resnap, frontPoint, shapeSpots, faceAnchors } from '../body/sdf.js?v=202610071442';
-import { FREE_SLOTS, freeKnobSpots } from '../parts.js?v=202610071442';
-import { holePattern } from '../speaker-patterns.js?v=202610071442';
-import { drawMarkers } from './markers.js?v=202610071442';
-import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js?v=202610071442';
+import { CONFIG } from '../config.js?v=202610080154';
+import { state, params, onChange, addExtra, updateExtra, removeExtra, mountNormal } from '../state.js?v=202610080154';
+import { view } from '../view.js?v=202610080154';
+import { Spring } from '../body/springs.js?v=202610080154';
+import { snapRay, resnap, frontPoint, shapeSpots, faceAnchors } from '../body/sdf.js?v=202610080154';
+import { FREE_SLOTS, freeKnobSpots } from '../parts.js?v=202610080154';
+import { holePattern } from '../speaker-patterns.js?v=202610080154';
+import { drawMarkers } from './markers.js?v=202610080154';
+import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js?v=202610080154';
 
 const NS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs = {}, parent) => {
@@ -266,7 +266,8 @@ export function createExtras(svg, { onPulse, offsets = () => [], dotGrid = null 
   onChange(() => {
     for (const e of state.extras) {
       if (drag && drag.id === e.id) continue;
-      const s = resnap(e.p, e.n);
+      // anchored (a spot the design chose, e.g. the main knob under the speaker): the skin grows to it, it never slides away
+      const s = e.anchor ? (resnap(e.anchor, e.n, true) ?? { p: e.anchor, n: e.n }) : resnap(e.p, e.n);
       e.p = s.p; // silent update (no emit) to avoid a feedback loop
       e.n = mountNormal(s.n);
     }

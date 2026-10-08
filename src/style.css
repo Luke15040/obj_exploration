@@ -801,6 +801,7 @@ body.mode-live {
 body.mode-live::after { opacity: 0.12; mix-blend-mode: screen; }
 
 /* flat hd 2: lighter part numbers */
+body[data-page="cross"] .part-labels { display: none; }   /* the cross page: no part numbers */
 body.mode-flathd2 .part-labels text { font-weight: 400; font-size: 11px; stroke-width: 1.6px; stroke: rgba(0, 0, 0, 0.25); }
 
 /* snap marker style (bottom right, above the looks) */
@@ -975,6 +976,132 @@ body[data-page="cross"] #pagelink { top: 20px; }
   transition: transform 380ms cubic-bezier(.2, .8, .2, 1);
 }
 #viewctl-toggle:hover { color: var(--ink-strong); }
+body:not(.mode-cross):not(.mode-flathd2):not(.mode-density):not(.mode-gradient) #viewctl-toggle { display: none; }
+/* flat hd 2 has the frost too: the slider and its toggle, at the bottom of the column */
+body.mode-flathd2 #frost, body.mode-flathd2 #frostfollow, body.mode-flathd2 .opslider { display: flex; }   /* (same places as in cross) */
+/* flat hd 2: finished / unfinished drawing, above the blur toggle (like the frost toggle) */
+#unfinished {
+  position: fixed; right: 20px; bottom: 444px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2 #unfinished { display: flex; }
+body.hide-viewctl #unfinished { display: none; }
+/* …and the pace of its gaps, above it, only while it is unfinished */
+#unfspeed {
+  position: fixed; right: 20px; bottom: 480px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2.unfinished-on #unfspeed { display: flex; }
+body.hide-viewctl #unfspeed { display: none; }
+/* flat hd 2: still ↔ alive, at the top of its column */
+#flatalive {
+  position: fixed; right: 20px; bottom: 408px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2 #flatalive { display: flex; }
+body.hide-viewctl #flatalive { display: none; }
+/* flat hd 2, unfinished: gaps · retraced · hand (above the pace slider, only while unfinished) */
+.unfctl {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+.unfctl input { width: 110px; accent-color: var(--ink); }
+body.mode-flathd2.unfinished-on .unfctl { display: flex; }
+body.hide-viewctl .unfctl { display: none !important; }
+#unfgaps { bottom: 516px; } #unftwice { bottom: 552px; } #unfhand { bottom: 588px; }
+/* flat hd 2: lines colour / grey · parts fill / outline, at the top of the column */
+#flatlines {
+  position: fixed; right: 20px; bottom: 624px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2 #flatlines { display: flex; }
+body.hide-viewctl #flatlines { display: none; }
+#flatlines .lbl { margin-right: 4px; }
+#flatlines .lbl.sep { margin-left: 10px; }
+#flatlines button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#flatlines button:hover { color: var(--ink-strong); }
+#flatlines button.on { color: var(--bg-center); background: var(--ink); }
+#flatalive input { width: 110px; accent-color: var(--ink); }
+/* the gradient view's controls: the right-hand column (outside, round, wobble, flow, grain, colour) */
+.gradctl {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+.gradctl input { width: 110px; accent-color: var(--ink); }
+body.mode-gradient .gradctl, body.mode-gradient #outsideop { display: flex; }
+#gradround { bottom: 300px; } #gradwobble { bottom: 336px; } #gradflow { bottom: 372px; } #gradgrain { bottom: 408px; } #gradpal { bottom: 444px; gap: 1px; padding: 3px 4px 3px 10px; }
+body.mode-gradient #outsideop { bottom: 264px; }
+#gradpal .lbl { margin-right: 4px; }
+#gradpal button[data-gp] { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: linear-gradient(135deg, var(--sw) 50%, var(--sw2) 50%); cursor: pointer; }
+#gradpal button[data-gp].on { border-color: var(--ink); }
+#gradpal button.page { font: inherit; padding: 3px 8px; margin-left: 4px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#gradpal button.page.on { color: var(--bg-center); background: var(--ink); }
+body.hide-viewctl .gradctl, body.hide-viewctl.mode-gradient #outsideop { display: none !important; }
+/* density's own controls (and on the cross page: in the right-hand column, like the others) */
+#densstyle, #denssoft, #denspal, #densdiverge, #densglow {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#denssoft, #densdiverge, #densglow { gap: 8px; padding: 4px 12px 4px 10px; }
+#denssoft input, #densdiverge input, #densglow input { width: 110px; accent-color: var(--ink); }
+body[data-page="cross"].mode-density #densdiverge, body[data-page="cross"].mode-density.dens-soft #densglow { display: flex; }
+#densstyle .lbl, #denspal .lbl { margin-right: 4px; }
+#densstyle button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#densstyle button:hover { color: var(--ink-strong); }
+#densstyle button.on { color: var(--bg-center); background: var(--ink); }
+#denspal button { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); cursor: pointer; }
+#denspal button.on { border-color: var(--ink); }
+body.mode-density #densstyle, body.mode-density #denspal, body.mode-density.dens-soft #denssoft { display: flex; }
+body[data-page="cross"].mode-density .opslider { display: flex; }
+body[data-page="cross"] #densnap { display: none !important; }
+body[data-page="cross"].mode-density #frost { display: flex; bottom: 336px; }
+body[data-page="cross"] #denssoft { bottom: 372px; }
+body[data-page="cross"] #densdiverge { bottom: 408px; }
+body[data-page="cross"] #densmotion { bottom: 444px; }
+body[data-page="cross"] #densglow { bottom: 480px; }
+body[data-page="cross"] #densstyle { bottom: 516px; }
+body[data-page="cross"] #denspal { bottom: 552px; }
+body[data-page="cross"] #denslines { bottom: 588px; }
+/* density, soft ball: grain and edge, above the outlines */
+.densctl {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+.densctl input { width: 110px; accent-color: var(--ink); }
+body.mode-density.dens-soft .densctl { display: flex; }
+#densgrain { bottom: 624px; } #densedge { bottom: 660px; }
+body:not([data-page="cross"]) #densgrain { bottom: 310px; } body:not([data-page="cross"]) #densedge { bottom: 346px; }
+body.hide-viewctl .densctl { display: none !important; }
+/* density (cross page): the transition while it turns, at the foot of the column */
+#denstrans {
+  position: fixed; right: 20px; bottom: 228px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body[data-page="cross"].mode-density #denstrans { display: flex; }
+body.hide-viewctl #denstrans { display: none !important; }
+#denstrans .lbl { margin-right: 4px; }
+#denstrans button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#denstrans button:hover { color: var(--ink-strong); }
+#denstrans button.on { color: var(--bg-center); background: var(--ink); }
+body:not([data-page="cross"]) #densstyle { bottom: 202px; }
+body:not([data-page="cross"]) #denspal { bottom: 238px; }
+body:not([data-page="cross"]) #denssoft { bottom: 274px; }
+body.hide-viewctl #densstyle, body.hide-viewctl #denssoft, body.hide-viewctl #densdiverge, body.hide-viewctl #densglow, body.hide-viewctl #denspal, body.hide-viewctl #densmotion,
+body.hide-viewctl #denslines { display: none !important; }
+#unfspeed input { width: 110px; accent-color: var(--ink); }
+#unfinished .lbl { margin-right: 4px; }
+#unfinished button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#unfinished button:hover { color: var(--ink-strong); }
+#unfinished button.on { color: var(--bg-center); background: var(--ink); }
 #voxshimmer, #voxels, #frostfollow, #frost, .opslider, #crossdetail, #partstyle, #crossanim, #shimmer, #snapstyle {
   transition: transform 420ms cubic-bezier(.2, .8, .2, 1), opacity 300ms ease;
 }
@@ -1188,3 +1315,17 @@ body.look-1 .whl input { accent-color: var(--nd-on, #d5cfc3); }
 /* views node: the compass fills the card's width, centred (the view name below widens the card) */
 body.look-1 .vws .grid { grid-template-columns: repeat(3, 1fr); width: 100%; justify-items: stretch; gap: 3px; }
 body.look-1 .vws .grid button { width: auto; height: 30px; }
+
+/* cross page: the overall size as quiet dimension lines along the object's sides */
+#dims { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 2; pointer-events: none; overflow: visible; }
+#dims .ext { stroke: var(--ink-soft); stroke-width: 0.75; opacity: 0.45; fill: none; }
+#dims .dim { stroke: var(--ink-soft); stroke-width: 0.9; opacity: 0.7; fill: none; }
+#dims .lbl { font-size: 10px; letter-spacing: 0.04em; fill: var(--ink-soft); opacity: 0.85; font-variant-numeric: tabular-nums; }
+#dims-toggle {
+  position: fixed; top: 20px; left: 320px; z-index: 3;
+  font: inherit; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+#dims-toggle.on { color: var(--ink); }
+/* look b: the primitives stay icons only (the words under them are look a's) */
+body:not(.look-1) .shp .forms button span { display: none; }

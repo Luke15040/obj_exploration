@@ -1,23 +1,24 @@
-import { view } from './view.js?v=202610071442';
-import { state, setWheelSpread } from './state.js?v=202610071442';
-import { createOrbit } from './orbit.js?v=202610071442';
-import { createBody } from './body/body.js?v=202610071442';
-import { createComponents } from './components/components.js?v=202610071442';
-import { attachDrag } from './components/drag.js?v=202610071442';
-import { createExtras } from './components/extras.js?v=202610071442';
-import { createDebugPanel } from './debug/panel.js?v=202610071442';
-import { createPrompts } from './prompts.js?v=202610071442';
-import { createNodes } from './ui/nodes.js?v=202610071442';
-import { createBom } from './ui/bom.js?v=202610071442';
-import { createPartLabels } from './ui/labels.js?v=202610071442';
-import { createDiagram } from './ui/diagram.js?v=202610071442';
-import { createViewToggle } from './debug/viewtoggle.js?v=202610071442';
-import { createViewPad } from './ui/viewpad.js?v=202610071442';
-import { createFrame } from './ui/frame.js?v=202610071442';
-import { createGridPanel } from './ui/gridpanel.js?v=202610071442';
-import { createStretchPad } from './ui/stretchpad.js?v=202610071442';
-import { createSnapPad } from './ui/snappad.js?v=202610071442';
-import { createWheelPad } from './ui/wheelpad.js?v=202610071442';
+import { view } from './view.js?v=202610080154';
+import { state, setWheelSpread } from './state.js?v=202610080154';
+import { createOrbit } from './orbit.js?v=202610080154';
+import { createBody } from './body/body.js?v=202610080154';
+import { createComponents } from './components/components.js?v=202610080154';
+import { attachDrag } from './components/drag.js?v=202610080154';
+import { createExtras } from './components/extras.js?v=202610080154';
+import { createDebugPanel } from './debug/panel.js?v=202610080154';
+import { createPrompts } from './prompts.js?v=202610080154';
+import { createNodes } from './ui/nodes.js?v=202610080154';
+import { createBom } from './ui/bom.js?v=202610080154';
+import { createPartLabels } from './ui/labels.js?v=202610080154';
+import { createDiagram } from './ui/diagram.js?v=202610080154';
+import { createViewToggle } from './debug/viewtoggle.js?v=202610080154';
+import { createViewPad } from './ui/viewpad.js?v=202610080154';
+import { createFrame } from './ui/frame.js?v=202610080154';
+import { createGridPanel } from './ui/gridpanel.js?v=202610080154';
+import { createStretchPad } from './ui/stretchpad.js?v=202610080154';
+import { createSnapPad } from './ui/snappad.js?v=202610080154';
+import { createWheelPad } from './ui/wheelpad.js?v=202610080154';
+import { createDims } from './ui/dims.js?v=202610080154';
 
 const canvas = document.getElementById('body-layer');
 // if the GPU resets (driver timeout), come back with a fresh page once it is available again
@@ -58,13 +59,15 @@ if (document.body.dataset.page === 'cross') {
   nodes.addTool('wheels', createWheelPad({ onChange: () => { cancelAnimationFrame(pending); pending = requestAnimationFrame(() => prompts.placeAll()); }, layout: () => body.layout() }), {
     name: 'wheels',
     icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/></svg>',
-    when: () => state.kind === 'speaker' && state.moves,   // only once the object moves
+    when: () => state.kind === 'robot' || (state.kind === 'speaker' && state.moves),   // whatever moves
   });
   nodes.addTool('snap', createSnapPad(), {
     name: 'angle snap',
     icon: '<svg viewBox="0 0 24 24"><path d="M14 19.5V4.5M14 19.5 4.5 17.6M14 19.5l-8.4 4"/></svg>',
   });
 }
+
+const dims = document.body.dataset.page === 'cross' ? createDims({ body }) : null;
 
 // the cross page opens on the front view, the nodes where they belong, and a loading veil until it has all played
 if (document.body.dataset.page === 'cross') {
@@ -170,6 +173,7 @@ function tick(dt, draw = true) {
   bom.update();          // components list
   labels.update();       // part numbers (flat views)
   diagram.update();      // circles and lines (pixel view)
+  dims?.update();        // cross page: the overall size, under the object
 }
 requestAnimationFrame(frame);
 

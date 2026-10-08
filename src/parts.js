@@ -196,6 +196,14 @@ const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a
 const norm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 const rot = (R, v) => [R[0] * v[0] + R[3] * v[1] + R[6] * v[2], R[1] * v[0] + R[4] * v[1] + R[7] * v[2], R[2] * v[0] + R[5] * v[1] + R[8] * v[2]];
 
+/** Rotation whose local z is n and local y as close to world up as it gets (a screen on a side face stays upright). */
+function uprightFrame(n) {
+  const d = n[1];
+  // (lying on top: its top edge toward the back, so it reads from the front)
+  const v = Math.abs(d) > 0.9 ? [0, 0, -Math.sign(d)] : norm([-n[0] * d, 1 - n[1] * d, -n[2] * d]);
+  return [...cross(v, n), ...v, ...n];
+}
+
 /** Rotation whose local z is n (columns: u, v, n), same basis convention as the shaders. */
 function frameFromNormal(n) {
   const a = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
@@ -424,6 +432,8 @@ function chooseFaces(faces, count) {
   const out = [];
   if (count % 2 === 1 && top) out.push(top);
   for (const [a, b] of pairs) { if (out.length < count) out.push(a); if (out.length < count) out.push(b); }
+  const rest = faces.filter((f) => !out.includes(f)).sort((a, b) => Math.abs(b.n[0]) - Math.abs(a.n[0]) || b.n[1] - a.n[1]);
+  for (const f of rest) if (out.length < count) out.push(f);
   while (out.length < count) out.push(out[out.length % Math.max(1, out.length)] ?? faces[0]);
   return out;
 }
@@ -450,7 +460,40 @@ export function screenSlotFor(spot, speakerLib = 'speaker', screenLib = 'matrix'
   return screenSlot(spot, LIBRARY[speakerLib].size, LIBRARY[screenLib].size);
 }
 
-function primLayout(shape, content, spk, knobCount, pad) {
+/** The primitive's profile area (mm²): what the knob placement tries to keep small. */
+function primArea(P) {
+  if (P.kind === 1) return 4 * P.h[0] * P.h[1];
+  if (P.kind === 2) return Math.PI * P.a * P.a;
+  if (P.kind === 4) return Math.PI * P.a * P.a / 2 + 2 * P.a * P.h[1];
+  return P.n * P.a * P.a * Math.tan(Math.PI / P.n);
+}
+
+/**
+ * primLayout, trying the faces the (side) knobs could take and keeping the one that makes the
+ * smallest shape: one knob on any face, two on a mirrored pair (they stay symmetric). The
+ * default choice wins ties.
+ */
+function bestPrimLayout(shape, content, spk, knobCount, pad, knobFront = false, avoid = null) {
+  const base = primLayout(shape, content, spk, knobCount, pad, knobFront, avoid);
+  const rem = knobCount - (knobFront && knobCount > 0 ? 1 : 0);
+  if (rem < 1 || rem > 2) return base;
+  const faces = primFaces(base.prim).filter((f) => !avoid || f.n[0] * avoid[0] + f.n[1] * avoid[1] < 0.9)
+    .filter((f) => !(knobFront && knobCount > 0) || Math.abs(f.n[0]) > 0.3);
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const options = rem === 1
+    ? faces.map((f) => [f.n])
+    : faces.filter((f) => f.n[0] > 0.01).map((f) => [f.n, faces.find((g) => r2(g.n[0]) === r2(-f.n[0]) && r2(g.n[1]) === r2(f.n[1]))?.n]).filter((o) => o[1]);
+  let best = base, area = primArea(base.prim) - 1;   // (the default keeps a small edge)
+  for (const ns of options) {
+    const pick = (fs) => ns.map((n) => fs.reduce((a, b) => (b.n[0] * n[0] + b.n[1] * n[1] > a.n[0] * n[0] + a.n[1] * n[1] ? b : a)));
+    const L = primLayout(shape, content, spk, knobCount, pad, knobFront, avoid, pick);
+    const A = primArea(L.prim);
+    if (A < area) { area = A; best = L; }
+  }
+  return best;
+}
+
+function primLayout(shape, content, spk, knobCount, pad, knobFront = false, avoid = null, pick = null) {
   const wall = pad + 2;
   const zBack = Math.min(...content.map((b) => b.lo[2])) - pad;
   const zk = -(pad + ENC[0] / 2 + 3);                 // knobs on side faces sit near the front edge
@@ -460,11 +503,21 @@ function primLayout(shape, content, spk, knobCount, pad) {
   let prim, spots;
   for (let it = 0; it < 10; it++) {
     prim = fitPrimitive(shape, [...content.map(flat), flat(spk), ...need], zBack, wall);
-    const faces = chooseFaces(primFaces(prim), knobCount);
+    // the main knob (knobFront): on the front, centred under the speaker; the others on the side faces
+    const front = knobFront && knobCount > 0;
+    const all = primFaces(prim).filter((f) => !avoid || f.n[0] * avoid[0] + f.n[1] * avoid[1] < 0.9);   // (not the screen's face)
+    const sides = front ? all.filter((f) => Math.abs(f.n[0]) > 0.3) : all;
+    const faces = pick ? pick(sides.length ? sides : all) : chooseFaces(sides.length ? sides : all, knobCount - (front ? 1 : 0));
     spots = [{ type: 'speaker', p: [0, 0, 0], n: [0, 0, 1] }];
     const mods = [];
     const next = [];
-    for (let i = 0; i < knobCount; i++) {
+    if (front) {
+      const y = spk.lo[1] - CLEARANCE - 2 - ENC[1] / 2, zc = -(pad + ENC[2] / 2);   // (+2: clear of the speaker's module, else it gets pushed out)
+      mods.push({ lo: [-ENC[0] / 2, y - ENC[1] / 2, zc - ENC[2] / 2], hi: [ENC[0] / 2, y + ENC[1] / 2, zc + ENC[2] / 2] });
+      spots.push({ type: 'knob', p: [0, y, 0], n: [0, 0, 1] });
+      next.push({ lo: [-ENC[0] / 2, y - ENC[1] / 2], hi: [ENC[0] / 2, y + ENC[1] / 2] });   // the profile reaches round its module
+    }
+    for (let i = 0; i < faces.length; i++) {
       const f = faces[i];
       const n = [f.n[0], f.n[1], 0], t = [-f.n[1], f.n[0], 0];
       // a second knob on an already used face sits beside the first
@@ -668,7 +721,8 @@ function computeLayout(s) {
 
   // I2C: the brain has a single port (the Feather's STEMMA QT, or the HAT's Grove). With the screen
   // and knobs together, a passive 5-port hub sits beside the brain and each device gets its own cable
-  const i2cCount = (!box2 || s.withScreen ? 1 : 0) + knobs.length;
+  const robotFace = !box2 && s.withScreen !== false;   // the robot's screen ('has a face'), there unless taken off
+  const i2cCount = (robotFace || (box2 && s.withScreen) ? 1 : 0) + knobs.length;
   const hubLib = LIBRARY.qtHub.size;
   const hub = i2cCount > 1
     ? add('qt-hub', 'qtHub', [brain.c[0], (hat ?? brain).c[1] + (hat ?? brain).h[1] + CLEARANCE + hubLib[1] / 2, brain.c[2]], { rank: 4 })   // lying on top of the brain stack
@@ -676,8 +730,24 @@ function computeLayout(s) {
   // case 2 can get a screen too ("+ screen"): on the front, just above the speaker (or a totem level of its own)
   const scrLib = s.screen ?? 'matrix';
   const scrSize = LIBRARY[scrLib].size;
-  let screenAt = null;
-  if (box2 && s.withScreen) screenAt = screenSlot(s.screenSpot, SPK, scrSize);
+  let screenAt = null, screenR = IDENTITY;
+  // 'side': not the main feature — on a side face of the shape, facing out sideways
+  const mount = box2 && s.withScreen && shape !== 'totem' ? s.screenMount : null;   // dragged by hand: exactly there
+  const screenSide = !mount && box2 && s.withScreen && s.screenSpot === 'side' && shape !== 'totem';
+  if (box2 && s.withScreen) screenAt = screenSlot(screenSide ? 'top' : s.screenSpot, SPK, scrSize);
+  if (mount) {
+    // flush: its face on the surface where it was dropped, upright
+    screenAt = mount.p.map((v, k) => v - mount.n[k] * scrSize[2] / 2);
+    screenR = uprightFrame(mount.n);
+  }
+  if (screenSide && !prim) {
+    // free skin: just outside the widest electronics (and the front knobs' modules), mid-depth, facing +x
+    let mx = SPK[0] / 2;
+    for (const p of [battery, buck, brain, hat, hub].filter(Boolean)) mx = Math.max(mx, p.c[0] + extents(p)[0]);
+    for (const e of knobs) mx = Math.max(mx, e.p[0] + ENC[0] / 2 + s.pad);
+    screenAt = [mx + CLEARANCE + scrSize[2] / 2, 0, back * 0.6];
+    screenR = uprightFrame([1, 0, 0]);
+  }
 
   // case 2 primitive: shape and add-on spots from the electronics as placed (before any relaxing),
   // so the CPU surface and the shader always agree
@@ -693,18 +763,37 @@ function computeLayout(s) {
       for (const p of [battery, buck, brain, hat, hub].filter(Boolean)) p.c[1] += shaped.dy;   // the electronics move with their level
       if (screenAt) screenAt = shaped.spots.find((q) => q.type === 'screen').p.slice();
       shaped.spots = shaped.spots.filter((q) => q.type !== 'screen');
+    } else if (screenSide) {
+      // first the shape without it, then the screen on the side face the knobs leave free (flush, mid-depth);
+      // then again with the screen as content (inset by the wall: it doesn't grow the profile), so the knobs keep clear
+      const nk = s.knobCount ?? knobs.length;
+      const first = bestPrimLayout(shape, content, spk, nk, s.pad, s.knobFront);
+      // the right-hand face (the one facing +x the most): the screen's; the knobs take the others
+      const f = primFaces(first.prim).sort((a, b) => b.n[0] - a.n[0])[0];
+      if (f) {
+        const n = [f.n[0], f.n[1], 0];
+        const zc = Math.max(first.prim.z[1] / 2, first.prim.z[1] + scrSize[0] / 2 + 4);
+        screenAt = [f.p[0] - n[0] * scrSize[2] / 2, f.p[1] - n[1] * scrSize[2] / 2, zc];
+        screenR = uprightFrame(n);
+        const w = s.pad + 2, e = [Math.abs(n[1]) * scrSize[0] / 2 + Math.abs(n[0]) * scrSize[2] / 2, Math.abs(n[0]) * scrSize[1] / 2 + Math.abs(n[1]) * scrSize[2] / 2];
+        const cx = screenAt[0] - n[0] * w, cy = screenAt[1] - n[1] * w;
+        content.push({ lo: [cx - e[0], cy - e[1], zc - scrSize[0] / 2], hi: [cx + e[0], cy + e[1], zc + scrSize[0] / 2] });
+      } else screenAt = null;
+      const one = bestPrimLayout(shape, content, spk, nk, s.pad, s.knobFront, f ? f.n : null);
+      shaped = { prims: [one.prim], spots: one.spots };
     } else {
       // the screen counts as content, so the shape grows around it and the knobs keep clear of it
-      if (screenAt) content.push({ lo: [-scrSize[0] / 2, screenAt[1] - scrSize[1] / 2, -s.pad - scrSize[2]], hi: [scrSize[0] / 2, screenAt[1] + scrSize[1] / 2, scrSize[2] / 2] });
-      const one = primLayout(shape, content, spk, s.knobCount ?? knobs.length, s.pad);
+      // (dragged by hand: it sits on the surface already, the shape stays as it is)
+      if (screenAt && !mount) content.push({ lo: [-scrSize[0] / 2, screenAt[1] - scrSize[1] / 2, -s.pad - scrSize[2]], hi: [scrSize[0] / 2, screenAt[1] + scrSize[1] / 2, scrSize[2] / 2] });
+      const one = bestPrimLayout(shape, content, spk, s.knobCount ?? knobs.length, s.pad, s.knobFront, mount && Math.abs(mount.n[2]) < 0.5 ? mount.n : null);
       shaped = { prims: [one.prim], spots: one.spots };
     }
   }
 
   // the screen: the skin wraps its back and sides, its face stays flush
   const matrix = !box2
-    ? add('matrix', scrLib, [s.scr[0], s.scr[1], 0], { env: s.pad, fixed: true })
-    : screenAt ? add('matrix', scrLib, screenAt, { env: s.pad, fixed: true }) : null;
+    ? (robotFace ? add('matrix', scrLib, [s.scr[0], s.scr[1], 0], { env: s.pad, fixed: true }) : null)
+    : screenAt ? add('matrix', scrLib, screenAt, { env: s.pad, fixed: true, R: screenR }) : null;
 
   // modules behind surface-mounted add-ons, facing out along the surface normal; their
   // front sits one envelope thickness behind the mount point
@@ -873,7 +962,7 @@ function computeLayout(s) {
   const neck = {
     a: [Math.min(Math.max(s.scr[0], chassis.a[0]), chassis.b[0]), top - 4, brain.c[2] * 0.5],
     b: [s.scr[0], base + 6, 0],
-    r: s.neckR * t * t * (3 - 2 * t),
+    r: robotFace ? s.neckR * t * t * (3 - 2 * t) : 0,   // no face, no neck
   };
 
   return { parts: parts.slice(0, MAX_PARTS), chassis, neck, cables: cables.slice(0, MAX_CABLES), offsets, prims: [], stretch: stretchOf(parts, s.stretch) };

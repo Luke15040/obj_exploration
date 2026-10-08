@@ -1,7 +1,7 @@
-import { CONFIG } from './config.js?v=202610071442';
-import { view } from './view.js?v=202610071442';
-import { Spring } from './body/springs.js?v=202610071442';
-import { params } from './state.js?v=202610071442';
+import { CONFIG } from './config.js?v=202610080154';
+import { view } from './view.js?v=202610080154';
+import { Spring } from './body/springs.js?v=202610080154';
+import { params } from './state.js?v=202610080154';
 
 const DEG = Math.PI / 180;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -70,7 +70,7 @@ export function createOrbit(svg) {
   svg.addEventListener('pointerdown', (e) => {
     if (!isBackground(e) || e.button !== 0) return;
     try { svg.setPointerCapture(e.pointerId); } catch {} // capture can fail for synthetic pointers
-    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, from: { ...cur }, free: params.view === 'cross', turning: false, start: { ...shown } };
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, from: { ...cur }, free: params.view === 'cross' || params.view === 'flathd2' || params.view === 'density', turning: false, start: { ...shown } };
     document.body.classList.add('is-orbiting');
   });
 
@@ -168,7 +168,7 @@ export function createOrbit(svg) {
     if (Math.abs(zoom.value - view.zoom) > 1e-4) view.setZoom(zoom.value);
     const a = angles(cur);
     if (turnOut) {
-      turnOut.t = Math.min(1, turnOut.t + dt / S.turnOut);
+      turnOut.t = Math.min(1, turnOut.t + dt / (params.view === 'flathd2' || params.view === 'density' ? S.turnOutFlat ?? S.turnOut : S.turnOut));
       params.outT = turnOut.t;
       if (turnOut.t >= 1) { endTurnOut(); params.moving = true; }
     }
