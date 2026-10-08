@@ -1,8 +1,8 @@
-import { state, moveWheel, moveScreen, setScreenSpot, setScreenMount } from '../state.js?v=202610080154';
-import { SCREEN_SPOTS, screenSlotFor, LIBRARY } from '../parts.js?v=202610080154';
-import { view } from '../view.js?v=202610080154';
-import { snapRay, currentLayout, surfaceSDF } from '../body/sdf.js?v=202610080154';
-import { drawMarkers } from './markers.js?v=202610080154';
+import { state, moveWheel, moveScreen, setScreenSpot, setScreenMount } from '../state.js?v=202610081559';
+import { SCREEN_SPOTS, screenSlotFor, LIBRARY } from '../parts.js?v=202610081559';
+import { view } from '../view.js?v=202610081559';
+import { snapRay, currentLayout, surfaceSDF, faceAnchors } from '../body/sdf.js?v=202610081559';
+import { drawMarkers } from './markers.js?v=202610081559';
 
 /** Current centre (mm) of a part by its data-part name. */
 function partPos(part) {
@@ -37,10 +37,32 @@ function snapScreen(cx, cy) {
   setScreenSpot(best);
 }
 
+/** Does the screen fit at p, facing n: all of its face on the surface, clear of the speaker and the knobs? */
+function screenFits(p, n) {
+  const size = LIBRARY[state.screenType]?.size ?? LIBRARY.matrix.size;
+  const ny = n[1], v = Math.abs(ny) > 0.9 ? [0, 0, -Math.sign(ny)] : (() => { const a = [-n[0] * ny, 1 - n[1] * ny, -n[2] * ny], l = Math.hypot(...a) || 1; return a.map((x) => x / l); })();
+  const u = [v[1] * n[2] - v[2] * n[1], v[2] * n[0] - v[0] * n[2], v[0] * n[1] - v[1] * n[0]];
+  const hw = size[0] / 2 + 2, hh = size[1] / 2 + 2;
+  for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const q = [0, 1, 2].map((k) => p[k] + u[k] * a * hw + v[k] * b * hh - n[k] * 1.5);
+    if (surfaceSDF(q) > 3) return false;   // a corner off the face
+  }
+  for (const e of state.extras) {
+    if (e.n[0] * n[0] + e.n[1] * n[1] + e.n[2] * n[2] < 0.5) continue;   // on another face
+    const q = [0, 1, 2].map((k) => e.p[k] - p[k]);
+    const dx = Math.abs(q[0] * u[0] + q[1] * u[1] + q[2] * u[2]) - hw, dy = Math.abs(q[0] * v[0] + q[1] * v[1] + q[2] * v[2]) - hh;
+    if (Math.hypot(Math.max(dx, 0), Math.max(dy, 0)) < (e.type === 'speaker' ? 18 : 8)) return false;   // over the grille / a knob
+  }
+  return true;
+}
+
+let screenMarks = null;   // (set by attachDrag) shows the screen's snap points while it is dragged
+
 /**
- * Case 2: the screen goes wherever it is dragged on the surface, like the knobs and the speaker:
- * the point under the cursor, its face flush there, upright. On a geometric shape it takes the
- * face's own direction; on the free skin the nearest straight one (front, back, left, right, top).
+ * Case 2: the screen is dragged over the surface and clicks to the snap points of the face under the
+ * cursor, like the knobs and the speaker (the same 3×3 points, shown while dragging): the nearest one where
+ * it fits, its face flush there, upright. On a geometric shape it takes the face's own direction; on the
+ * free skin the nearest straight one (front, back, left, right, top). Nowhere it fits: it stays put.
  */
 function mountScreen(ev) {
   const { o, d } = view.ray(ev.clientX, ev.clientY);
@@ -52,23 +74,25 @@ function mountScreen(ev) {
   else if (state.shape === 'free') { const k = Math.abs(n[0]) >= Math.abs(n[1]) ? 0 : 1; n = [0, 0, 0]; n[k] = Math.sign(res.n[k]); }
   else { const l = Math.hypot(n[0], n[1]) || 1; n = [n[0] / l, n[1] / l, 0]; }
   if (n[1] < -0.5) return;   // not underneath
-  const p = res.p.map((v) => Math.round(v * 2) / 2);
-  // only where it fits: all of its face on the surface, clear of the speaker and the knobs; else it stays put
-  const size = LIBRARY[state.screenType]?.size ?? LIBRARY.matrix.size;
-  const ny = n[1], v = Math.abs(ny) > 0.9 ? [0, 0, -Math.sign(ny)] : (() => { const a = [-n[0] * ny, 1 - n[1] * ny, -n[2] * ny], l = Math.hypot(...a) || 1; return a.map((x) => x / l); })();
+  // the face's snap points, and a 10 mm grid around the cursor on the face (the screen is big: of the face's
+  // 3×3 points often only one leaves it room) — only where it fits
+  const ny = n[1], v = Math.abs(ny) > 0.9 ? [0, 0, -Math.sign(ny)] : (() => { const q = [-n[0] * ny, 1 - n[1] * ny, -n[2] * ny], l = Math.hypot(...q) || 1; return q.map((x) => x / l); })();
   const u = [v[1] * n[2] - v[2] * n[1], v[2] * n[0] - v[0] * n[2], v[0] * n[1] - v[1] * n[0]];
-  const hw = size[0] / 2 + 2, hh = size[1] / 2 + 2;
-  for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-    const q = [0, 1, 2].map((k) => p[k] + u[k] * a * hw + v[k] * b * hh - n[k] * 1.5);
-    if (surfaceSDF(q) > 3) return;   // a corner off the face
+  const G = 10, cu = Math.round((res.p[0] * u[0] + res.p[1] * u[1] + res.p[2] * u[2]) / G), cv = Math.round((res.p[0] * v[0] + res.p[1] * v[1] + res.p[2] * v[2]) / G);
+  const dn = res.p[0] * n[0] + res.p[1] * n[1] + res.p[2] * n[2];
+  const grid = [];
+  for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) {
+    const a = (cu + i) * G, b = (cv + j) * G;
+    grid.push({ p: [0, 1, 2].map((k) => u[k] * a + v[k] * b + n[k] * dn) });
   }
-  for (const e of state.extras) {
-    if (e.n[0] * n[0] + e.n[1] * n[1] + e.n[2] * n[2] < 0.5) continue;   // on another face
-    const q = [0, 1, 2].map((k) => e.p[k] - p[k]);
-    const dx = Math.abs(q[0] * u[0] + q[1] * u[1] + q[2] * u[2]) - hw, dy = Math.abs(q[0] * v[0] + q[1] * v[1] + q[2] * v[2]) - hh;
-    if (Math.hypot(Math.max(dx, 0), Math.max(dy, 0)) < (e.type === 'speaker' ? 18 : 8)) return;   // over the grille / a knob
+  const anchors = [...faceAnchors(n), ...grid].filter((A) => screenFits(A.p, n));
+  let best = null, bd = Infinity;
+  for (const A of anchors) {
+    const dd = Math.hypot(A.p[0] - res.p[0], A.p[1] - res.p[1], A.p[2] - res.p[2]);
+    if (dd < bd) { bd = dd; best = A; }
   }
-  setScreenMount({ p, n });
+  screenMarks?.(anchors.map((A) => { const [x, y] = view.project(...A.p); return { x, y, p: A.p, n, on: A === best }; }));
+  if (best) setScreenMount({ p: best.p.slice(), n });
 }
 
 function movePart(part, x, y, cursor, ev) {
@@ -91,6 +115,7 @@ export function attachDrag(svg, hooks = {}) {
   spots.setAttribute('class', 'screen-spots');
   spots.setAttribute('pointer-events', 'none');
   svg.appendChild(spots);
+  screenMarks = (list) => drawMarkers(spots, list);   // (case 2: the face's snap points while the screen is dragged)
   const showSpots = (on) => drawMarkers(spots, !on ? [] : freeSpots().map((spot) => {
     const c = screenSlotFor(spot, state.speakerLib, state.screenType);
     const [x, y] = view.project(c[0], c[1], 0);

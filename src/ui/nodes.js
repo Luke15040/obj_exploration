@@ -1,11 +1,11 @@
-import { CONFIG, NODE_PALETTE } from '../config.js?v=202610080154';
-import { state, params } from '../state.js?v=202610080154';
-import { view } from '../view.js?v=202610080154';
-import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js?v=202610080154';
-import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js?v=202610080154';
-import { SCREENS } from '../config.js?v=202610080154';
-import { refImageURL, REF_LABELS } from './refimages.js?v=202610080154';
-import { playVoice } from './sound.js?v=202610080154';
+import { CONFIG, NODE_PALETTE } from '../config.js?v=202610081559';
+import { state, params } from '../state.js?v=202610081559';
+import { view } from '../view.js?v=202610081559';
+import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js?v=202610081559';
+import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js?v=202610081559';
+import { SCREENS } from '../config.js?v=202610081559';
+import { refImageURL, REF_LABELS } from './refimages.js?v=202610081559';
+import { playVoice } from './sound.js?v=202610081559';
 
 const NS = 'http://www.w3.org/2000/svg';
 const easeOut = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
@@ -19,6 +19,9 @@ const easeOut = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
  *   sounds, which plays it (each note ripples out from the speaker).
  * Connectors are drawn every frame, so they follow the object as it moves.
  */
+/** Set an inline style only when it differs (a write, even of the same value, can make the page lay out again). */
+const setStyle = (el, k, v) => { if (el.style[k] !== v) el.style[k] = v; };
+
 export function createNodes({ body }) {
   /** Called with a reference id ('frog' | 'walle') when it should be applied. */
   let onApply = () => {};
@@ -316,7 +319,10 @@ export function createNodes({ body }) {
       <div class="value"><span class="k">shape</span><span class="v"></span></div>
     </div>`;
   document.body.appendChild(shp);
+  let shownShape = null;
   const drawShape = () => {
+    if (shownShape === state.shape) return;
+    shownShape = state.shape;
     shp.querySelectorAll('[data-form]').forEach((b) => b.classList.toggle('on', b.dataset.form === state.shape));
     const f = FORMS.find(([k]) => k === state.shape);
     shp.querySelector('.value .v').textContent = f ? f[1] : state.shape;
@@ -326,6 +332,7 @@ export function createNodes({ body }) {
     const k = e.target.closest('[data-form]')?.dataset.form;
     if (!k) return;
     onShape(k);                 // modular re-rolls on every click
+    shownShape = null;
     drawShape();
   });
 
@@ -344,7 +351,7 @@ export function createNodes({ body }) {
   toolbox.innerHTML = '<span class="lbl">log</span>' + Object.keys(TOOLS).map((k) => `<button data-tool="${k}" title="${TOOL_NAMES[k]}" aria-label="${TOOL_NAMES[k]}">${TOOL_ICONS[k]}</button>`).join('');
   document.body.appendChild(toolbox);
   // open / closed per tool; screen and speaker open by themselves when they arrive (prompts), energy on demand
-  const open = { shape: true, screen: true, speaker: true, energy: false };
+  const open = { shape: true, screen: true, speaker: true, energy: document.body.dataset.page === 'cross' };   // (the cross page: power too, among the left modifiers)
   const extraTools = {};   // tools added from outside (views): k → always available
   const placed = {};      // tools the user dragged somewhere: { left, top } in px (otherwise they stack on the right)
   let homes = {};         // default places (fractions of the window, cross page): k → [fx, fy]
@@ -432,7 +439,8 @@ export function createNodes({ body }) {
   toolsBtn.addEventListener('click', () => { toolsOn = !toolsOn; markTools(); });
   const placeToolsBtn = () => {
     const cs = document.getElementById('casetoggle');
-    if (cs) toolsBtn.style.left = `${Math.round(cs.getBoundingClientRect().right + 12)}px`;
+    const r = cs?.getBoundingClientRect();
+    toolsBtn.style.left = `${r && r.width ? Math.round(r.right + 12) : 20}px`;   // (the cross page: no case switch)
   };
   requestAnimationFrame(placeToolsBtn);
   window.addEventListener('resize', placeToolsBtn);
@@ -468,12 +476,12 @@ export function createNodes({ body }) {
       placedKind = lookNow;
       for (const k in placed) if (placed[k].auto) delete placed[k];
     }
-    for (const k in homes) if (!placed[k]) placed[k] = { left: Math.round(homes[k][0] * window.innerWidth), top: Math.round(homes[k][1] * window.innerHeight), home: true };
+    for (const k in homes) if (TOOLS[k] && !placed[k]) placed[k] = { left: Math.round(homes[k][0] * window.innerWidth), top: Math.round(homes[k][1] * window.innerHeight), home: true };
     const pending = Object.keys(TOOLS).filter((k) => !TOOLS[k].classList.contains('hidden') && !placed[k]);
     for (const k of Object.keys(TOOLS)) {
       const n = TOOLS[k];
       if (n.classList.contains('hidden') || !placed[k]) continue;
-      n.style.left = `${placed[k].left}px`; n.style.right = 'auto'; n.style.top = `${placed[k].top}px`;
+      setStyle(n, 'left', `${placed[k].left}px`); setStyle(n, 'right', 'auto'); setStyle(n, 'top', `${placed[k].top}px`);
     }
     if (!pending.length) return;
     const L = body.layout();
@@ -495,7 +503,7 @@ export function createNodes({ body }) {
     const list = document.querySelector('.node.bom')?.getBoundingClientRect();
     const gap = Math.max(60, Math.min(140, (x1 - x0) * 0.35));
     // nodes already in place are obstacles
-    const taken = Object.entries(placed).filter(([k]) => !TOOLS[k].classList.contains('hidden'))
+    const taken = Object.entries(placed).filter(([k]) => TOOLS[k] && !TOOLS[k].classList.contains('hidden'))   // (a place kept for a node that isn't there: skip it)
       .map(([k, p]) => ({ x: p.left, y: p.top, w: TOOLS[k].offsetWidth, h: TOOLS[k].offsetHeight }));
     const items = pending.map((k) => {
       const t = target[k];
@@ -547,10 +555,14 @@ export function createNodes({ body }) {
   function drawLink(L, visible, x1, y1, x2, y2, kind, dt) {
     L.drawT = visible ? Math.min(1, L.drawT + dt / 0.6) : 0;
     const on = visible && L.drawT > 0;
-    for (const n of [L.path, L.a, L.b]) n.style.display = on ? '' : 'none';
+    for (const n of [L.path, L.a, L.b]) setStyle(n, 'display', on ? '' : 'none');
     if (!on) return;
-    L.path.setAttribute('d', elbow(x1, y1, x2, y2, kind));
-    const len = L.path.getTotalLength();
+    // (unchanged since the last frame: nothing to write — each write made the page lay itself out again)
+    const d = elbow(x1, y1, x2, y2, kind);
+    if (d === L.lastD && L.drawT === L.lastT) return;
+    if (d !== L.lastD) { L.path.setAttribute('d', d); L.len = L.path.getTotalLength(); }
+    L.lastD = d; L.lastT = L.drawT;
+    const len = L.len;
     const k = easeOut(L.drawT);
     L.path.style.strokeDasharray = `${len}`;
     L.path.style.strokeDashoffset = `${len * (1 - k)}`;
@@ -567,8 +579,8 @@ export function createNodes({ body }) {
     const top = view.project(state.screen.x, state.screen.y + S.h / 2 + 2, 0);
     drawLink(refLink, refOn, rb.right, rb.top + 44, top[0], top[1], 'L', dt);
     // the offered image sits right of the references node, under its connector (free space)
-    tray.style.left = `${Math.round(rb.right + 24)}px`;
-    tray.style.top = `${Math.round(rb.top + 70)}px`;
+    setStyle(tray, 'left', `${Math.round(rb.right + 24)}px`);
+    setStyle(tray, 'top', `${Math.round(rb.top + 70)}px`);
 
     // reference travelling down the connector
     if (pulseT >= 0 && refOn) {
@@ -585,7 +597,7 @@ export function createNodes({ body }) {
         onApply(pendingApply);
       }
     } else {
-      pulse.style.display = 'none';
+      setStyle(pulse, 'display', 'none');
     }
 
     // which tools the object has right now
@@ -593,12 +605,12 @@ export function createNodes({ body }) {
     const avail = { shape: state.kind === 'speaker', screen: state.withScreen, speaker: !!e, energy: true };
     for (const k in extraTools) avail[k] = extraTools[k]();
     if (!shp.classList.contains('hidden')) drawShape();
-    toolbox.style.display = toolsOn ? '' : 'none';
+    setStyle(toolbox, 'display', toolsOn ? '' : 'none');
     for (const k in avail) {
       if (avail[k] && !had[k] && k !== 'energy') open[k] = true;   // a new part opens its tool
       had[k] = avail[k];
       const btn = toolbox.querySelector(`[data-tool="${k}"]`);
-      btn.style.display = avail[k] ? '' : 'none';
+      setStyle(btn, 'display', avail[k] ? '' : 'none');
       btn.classList.toggle('on', avail[k] && open[k]);
       const show = toolsOn && avail[k] && open[k];
       if (show && TOOLS[k].classList.contains('hidden')) { TOOLS[k].classList.remove('hidden'); if (k === 'speaker') syncSound(); if (k === 'energy') drawEnergy(); }

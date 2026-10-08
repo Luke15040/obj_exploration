@@ -1,4 +1,4 @@
-import { view } from '../view.js?v=202610080154';
+import { view } from '../view.js?v=202610081559';
 
 /**
  * The views node — two ways to pick one of the essential drawn views:
@@ -14,7 +14,7 @@ import { view } from '../view.js?v=202610080154';
  * A click cuts (or glides) to that view, exactly like dragging or the arrow keys.
  * Orbit step k: yaw = k · 45°, the camera on that side (0 front, 2 right, 4 back, 6 left).
  */
-const CELLS = [
+export const CELLS = [
   { k: 5, name: 'axonometric · back left' }, { k: 4, name: 'back' }, { k: 3, name: 'axonometric · back right' },
   { k: 6, name: 'left' }, { top: true, name: 'plan (top)' }, { k: 2, name: 'right' },
   { k: 7, name: 'axonometric · front left' }, { k: 0, name: 'front' }, { k: 1, name: 'axonometric · front right' },
@@ -26,7 +26,7 @@ const CUBE_L = 'M3 5.6 8 8.4V14L3 11.2Z';
 const CUBE_R = 'M8 8.4 13 5.6v5.6L8 14Z';
 const cubeIcon = (frontSide) => `<svg viewBox="0 0 16 16">
   <path d="${CUBE_TOP}"/><path d="${CUBE_L}" class="${frontSide === 'L' ? 'front' : ''}"/><path d="${CUBE_R}" class="${frontSide === 'R' ? 'front' : ''}"/></svg>`;
-const ICONS = {
+export const ICONS = {
   // axonometric: front-right camera sees the front on the left of the image, front-left on the right
   1: cubeIcon('L'), 7: cubeIcon('R'), 3: cubeIcon(null), 5: cubeIcon(null),
   0: '<svg viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" class="front"/></svg>',

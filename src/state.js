@@ -1,5 +1,5 @@
-import { CONFIG, SCREENS } from './config.js?v=202610080154';
-import { layoutParts, LIBRARY, CABLES, minHalfTrack } from './parts.js?v=202610080154';
+import { CONFIG, SCREENS } from './config.js?v=202610081559';
+import { layoutParts, LIBRARY, CABLES, minHalfTrack } from './parts.js?v=202610081559';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -62,6 +62,12 @@ export const params = {
   densInside: 0,        // density: the parts seen through it (0 = hidden)
   densOutside: 0,       // density: knob caps, holes, the screen's face on top (the cross page starts at 1)
   densPalette: 0,
+  densPartStyle: 'flat',   // density: the parts inside, as in cross — 'colour' (real) · 'grey' · 'flat' · 'vector' (colour) · 'outline' · 'flathd2' (tiles)
+  densShapeA: 1,
+  densPartLineW: 1,        // density, parts as outline: the line's thickness (thin 0.6 … 4 thick)
+  densPartLineCol: 'ink',  // …and its colour: 'parts' (each its own) or a flatLineCols key
+  densPartLineA: 1,        // …and its opacity (faint 0.1 … 1 solid)
+  densOutCol: 'real',      // density: the outside's colour (knob caps, holes, screen) — 'real' or a flatLineCols key           // density: how solid the shape is (0 clear … 1 solid)
   densFrost: 0.5,
   densDiverge: 0.3,
   gradPalette: 0,       // gradient view: which palette (config.js gradient.palettes)
@@ -95,7 +101,16 @@ export const params = {
   frostFollow: true, // cross: the frost leaves with the tiles and comes back with them, pixel by pixel
   voxels: 0.13,     // cross: share of the shape's cells left on screen as voxels while the view changes
   insideOpacity: 0.79, // cross: how much the parts inside the shape show (0 = hidden by the skin)
+  flatLineCol: 'orange', // flat hd 2: the drawing's colour (config.js flatLineCols: orange · grey (warm) · aqua · olive · ink)
+  flatOutCol: 'same',   // flat hd 2: the outside's colour (screen, knobs, holes) — 'same' as the lines, or one of flatLineCols
   flatLines: 'colour',  // flat hd 2: the lines' colour — 'colour' (crayons) or 'grey' (pencil)
+  crossBright: 0.5,     // pegboard (cross): the body's brightness — 0 darker · 0.5 as designed · 1 lighter
+  flatTone: 'grey',     // flat hd 2 (cross page): the parts in 'grey', 'orange' · 'aqua' · 'olive' · 'taupe' (one scale), or 'colour'
+  flatShade: true,      // flat hd 2: the shade on faces seen edge-on (axonometric views)
+  flatPartsBroken: true, // flat hd 2: the parts' outlines broken like the drawing (or whole)
+  flatLineW: 1,         // flat hd 2: the line's weight (thin 0.3 … 2.5 thick)
+  flatSkinFill: 0,      // flat hd 2: a see-through fill on the shape's surfaces, in the outline's colour (0 none … 1 solid)
+  flatFrost: 0.68,      // flat hd 2: its blur (sharp 0 … blurred 1) — its own, the cross view keeps 'frost'
   flatParts: 'fill',    // flat hd 2: the parts — 'fill' or 'outline' (the same pencil as the shape)
   flatAlive: 0.4,       // flat hd 2: still (0) … alive (1) — the shape breathes, the line trembles
   unfinished: false,   // flat hd 2: the drawing left unfinished (gaps in its lines); the cross page starts with it

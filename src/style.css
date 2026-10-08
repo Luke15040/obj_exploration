@@ -222,6 +222,9 @@ body.mode-blocks .part.dragging .shape.primary { opacity: 1; }
   transition: color 160ms ease, background 160ms ease;
 }
 #viewtoggle button.on { color: var(--bg-center); background: var(--ink); }
+/* the chosen view is still being prepared (its shaders compiling): the last one stays, the button breathes */
+body.view-compiling #viewtoggle button.on { animation: view-prep 0.9s ease-in-out infinite alternate; }
+@keyframes view-prep { from { opacity: 1; } to { opacity: 0.4; } }
 #viewtoggle button:not(.on):hover { color: var(--ink-strong); }
 
 /* case 1 / case 2 switch, top left (same look as the view toggle) */
@@ -1026,7 +1029,38 @@ body.hide-viewctl #flatlines { display: none; }
 #flatlines button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
 #flatlines button:hover { color: var(--ink-strong); }
 #flatlines button.on { color: var(--bg-center); background: var(--ink); }
+#flatlines button.sw { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); }
+#flatlines button.sw.on { border-color: var(--ink); background: var(--sw); }
 #flatalive input { width: 110px; accent-color: var(--ink); }
+/* flat hd 2 (cross page): the parts' scale (grey / one colour / colour) and the line's weight, under the inside / outside sliders */
+#flattone, #flatthin, #flatfill {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#flattone { bottom: 228px; gap: 1px; padding: 3px 4px 3px 10px; }
+#flatthin { bottom: 192px; }
+#flatfill { bottom: 156px; }
+#flatoutcol {
+  position: fixed; right: 20px; bottom: 120px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2 #flatoutcol { display: flex; }
+body.hide-viewctl #flatoutcol { display: none; }
+#flatoutcol .lbl { margin-right: 4px; }
+#flatoutcol button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#flatoutcol button.word.on { color: var(--bg-center); background: var(--ink); }
+#flatoutcol button.sw { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); }
+#flatoutcol button.sw.on { border-color: var(--ink); }
+body.mode-flathd2 #flattone, body.mode-flathd2 #flatthin, body.mode-flathd2 #flatfill { display: flex; }
+body.hide-viewctl #flattone, body.hide-viewctl #flatthin, body.hide-viewctl #flatfill { display: none; }
+#flattone .lbl { margin-right: 4px; }
+#flattone button[data-ft] { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); cursor: pointer; }
+#flattone button[data-ft].on { border-color: var(--ink); }
+#flattone button.word { width: auto; height: auto; font: inherit; padding: 3px 8px; margin-left: 4px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); }
+#flattone button.word.on { color: var(--bg-center); background: var(--ink); }
+#flatthin input, #flatfill input { width: 110px; accent-color: var(--ink); }
 /* the gradient view's controls: the right-hand column (outside, round, wobble, flow, grain, colour) */
 .gradctl {
   position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 8px;
@@ -1059,6 +1093,20 @@ body[data-page="cross"].mode-density #densdiverge, body[data-page="cross"].mode-
 #denspal button { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); cursor: pointer; }
 #denspal button.on { border-color: var(--ink); }
 body.mode-density #densstyle, body.mode-density #denspal, body.mode-density.dens-soft #denssoft { display: flex; }
+/* density: the parts' look (as in cross) and the shape's opacity, at the foot of the column */
+#densparts, #densalpha {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#densparts { bottom: 192px; } #densalpha { bottom: 156px; gap: 8px; padding: 4px 12px 4px 10px; }
+body.mode-density #densparts, body.mode-density #densalpha { display: flex; }
+body.hide-viewctl #densparts, body.hide-viewctl #densalpha { display: none !important; }
+#densparts .lbl { margin-right: 4px; }
+#densparts button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#densparts button:hover { color: var(--ink-strong); }
+#densparts button.on { color: var(--bg-center); background: var(--ink); }
+#densalpha input { width: 110px; accent-color: var(--ink); }
 body[data-page="cross"].mode-density .opslider { display: flex; }
 body[data-page="cross"] #densnap { display: none !important; }
 body[data-page="cross"].mode-density #frost { display: flex; bottom: 336px; }
@@ -1329,3 +1377,240 @@ body.look-1 .vws .grid button { width: auto; height: 30px; }
 #dims-toggle.on { color: var(--ink); }
 /* look b: the primitives stay icons only (the words under them are look a's) */
 body:not(.look-1) .shp .forms button span { display: none; }
+
+
+/* ---------- the cross page, tidied: one case (the speaker), no components list, no dimensions, one look;
+   the views in the middle of the top; view and angle snap as modifiers on the left; the right column packed ---------- */
+body[data-page="cross"] #casetoggle,
+body[data-page="cross"] #dims-toggle,
+body[data-page="cross"] .node.bom,
+body[data-page="cross"] #looks,
+body[data-page="cross"] .node.vws,
+body[data-page="cross"] .node.snp,
+body[data-page="cross"].mode-flathd2 #frostfollow { display: none !important; }
+body[data-page="cross"] #viewtoggle { left: 50%; right: auto; transform: translateX(-50%); }
+#leftmods {
+  position: fixed; left: 20px; top: 50%; transform: translateY(-50%); z-index: 3;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+}
+#leftmods .lmod {
+  display: flex; align-items: center; gap: 1px; padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#leftmods .lbl { margin-right: 6px; }
+#leftmods .lsnap button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#leftmods .lsnap button:hover { color: var(--ink-strong); }
+#leftmods .lsnap button.on { color: var(--bg-center); background: var(--ink); }
+#leftmods .lviews { border-radius: 14px; padding: 6px 6px 6px 10px; align-items: flex-start; }
+#leftmods .lviews .lbl { margin-top: 5px; }
+#leftmods .vgrid { display: grid; grid-template-columns: repeat(3, 26px); gap: 2px; }
+#leftmods .vgrid button { width: 26px; height: 24px; padding: 0; display: grid; place-items: center; background: none; border: 0; border-radius: 6px; color: var(--ink-soft); cursor: pointer; }
+#leftmods .vgrid button:hover { color: var(--ink-strong); background: var(--hair); }
+#leftmods .vgrid button.on { color: var(--bg-center); background: var(--ink); }
+#leftmods .vgrid svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+#leftmods .vgrid svg .front { fill: currentColor; fill-opacity: 0.55; }
+#leftmods .vgrid svg .edge { stroke-width: 2.6; }
+/* the right column: one width, the label on the left, the controls on the right, a slider filling between */
+body[data-page="cross"] .rmod { min-width: 268px; box-sizing: border-box; justify-content: flex-end; }
+body[data-page="cross"] .rmod > .lbl:first-child { margin-right: auto !important; }
+body[data-page="cross"] .rmod input[type="range"] { flex: 1; width: auto; min-width: 60px; }
+/* the 'hide the controls' button: up in the free corner (the right column is packed under it) */
+body[data-page="cross"] #viewctl-toggle { top: 20px !important; bottom: auto !important; right: 20px !important; transform: none !important; }
+
+/* a view still being prepared: say so under the view switch (the last view stays until it is ready) */
+body.view-compiling #viewtoggle::after {
+  content: 'preparing ' attr(data-preparing) '…'; position: absolute; top: 34px; left: 50%; transform: translateX(-50%);
+  white-space: nowrap; font-size: 11px; color: var(--ink-soft); animation: view-prep 0.9s ease-in-out infinite alternate;
+}
+
+/* density: the outside's colour (real, or a swatch) */
+#densoutcol {
+  position: fixed; right: 20px; bottom: 140px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-density #densoutcol { display: flex; }
+body.hide-viewctl #densoutcol { display: none !important; }
+#densoutcol .lbl { margin-right: 4px; }
+#densoutcol button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#densoutcol button.word.on { color: var(--bg-center); background: var(--ink); }
+#densoutcol button.sw { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); }
+#densoutcol button.sw.on { border-color: var(--ink); }
+
+/* density, parts as outline: thickness and colour of the line (just under the parts' look) */
+.densoutl {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#denspartlw { bottom: 190px; } #denspartop { bottom: 189.5px; } #denspartcol { bottom: 189px; gap: 1px; padding: 3px 4px 3px 10px; }
+body.mode-density.dens-outline .densoutl { display: flex; }
+body.hide-viewctl .densoutl { display: none !important; }
+.densoutl input { width: 110px; accent-color: var(--ink); }
+#denspartcol .lbl { margin-right: 4px; }
+#denspartcol button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#denspartcol button.word.on { color: var(--bg-center); background: var(--ink); }
+#denspartcol button.sw { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); }
+#denspartcol button.sw.on { border-color: var(--ink); }
+/* the arrow hides the whole right column, whatever view or option shows a pill */
+body.hide-viewctl .rmod { display: none !important; }
+
+/* the arrow hides the whole right column, whatever view or option shows a pill */
+body.hide-viewctl .rmod { display: none !important; }
+
+/* flat hd 2: shade on / off · part lines broken / whole */
+#flatshade {
+  position: fixed; right: 20px; bottom: 104px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2 #flatshade { display: flex; }
+#flatshade .lbl { margin-right: 4px; }
+#flatshade .lbl.sep { margin-left: 10px; }
+#flatshade button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#flatshade button:hover { color: var(--ink-strong); }
+#flatshade button.on { color: var(--bg-center); background: var(--ink); }
+
+/* the cross page: the prompt is a plain line of text at the bottom (the blocks are not shown) */
+body[data-page="cross"] #promptcells, body[data-page="cross"] #blockagain { display: none !important; }
+#promptline {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 3; max-width: 52vw;
+  padding: 6px 14px; font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px; pointer-events: none;
+}
+
+/* the cross page: the tool nodes as modifiers in the left column (light cards like view / angle snap) */
+body[data-page="cross"] #links { display: none !important; }
+body[data-page="cross"] #leftmods { top: 70px; bottom: 80px; transform: none; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+body[data-page="cross"] #leftmods .node.tool {
+  position: static !important; left: auto !important; top: auto !important; right: auto !important; transform: none !important;
+  --nd-frame: transparent; --nd-edge: transparent; --nd-body: transparent; --nd-ink: var(--ink); --nd-soft: var(--ink-soft); --nd-cell: var(--hair);
+  background: var(--surface) !important; border: 1px solid var(--hair) !important; border-radius: 14px !important;
+  padding: 5px 8px 6px !important; box-shadow: none !important; width: 176px !important; box-sizing: border-box;
+}
+body[data-page="cross"] #leftmods .node.tool.hidden { display: none !important; }
+body[data-page="cross"] #leftmods .node .ctl { display: none !important; }
+body[data-page="cross"] #leftmods .node .hdr { height: auto !important; }
+body[data-page="cross"] #leftmods .node.tool .tab {
+  position: static !important; background: none !important; color: var(--ink-soft) !important; font-family: inherit !important;
+  font-weight: 400 !important; font-size: 11px !important; letter-spacing: 0 !important; text-transform: lowercase !important;
+  line-height: 1.5 !important; padding: 0 0 2px 2px !important; border-radius: 0 !important;
+}
+body[data-page="cross"] #leftmods .node.tool .tab::before, body[data-page="cross"] #leftmods .node.tool .tab::after { display: none !important; }
+body[data-page="cross"] #leftmods .node.tool .card { background: none !important; padding: 2px 0 0 !important; border: 0 !important; }
+body[data-page="cross"] #leftmods .node.tool.hl { box-shadow: inset 0 0 0 1px var(--hl, var(--ink)) !important; }
+/* (the nodes' buttons, as the modifiers': no fill, the chosen one dark) */
+body[data-page="cross"] #leftmods .node.tool .forms button, body[data-page="cross"] #leftmods .node.tool .seg button { background: none !important; color: var(--ink-soft) !important; border-radius: 8px; }
+body[data-page="cross"] #leftmods .node.tool .forms button:hover, body[data-page="cross"] #leftmods .node.tool .seg button:hover { color: var(--ink-strong) !important; }
+body[data-page="cross"] #leftmods .node.tool .forms button.on, body[data-page="cross"] #leftmods .node.tool .seg button.on { background: var(--ink) !important; color: var(--bg-center) !important; }
+body[data-page="cross"] #leftmods .node.tool .forms button.on svg { fill: none !important; }
+body[data-page="cross"] #leftmods .node.tool .value { border-color: var(--hair) !important; }
+
+/* the prompt line: which block is which — the root, the other features, the main feature */
+#promptline .pl-root { color: var(--ink-soft); }
+#promptline .pl-rest { color: #8a7f6e; }
+#promptline .pl-main { color: var(--ink-strong, #1f1e1c); font-weight: 600; }
+#promptline i { font-style: normal; color: var(--ink-soft); }
+
+/* the left modifiers, simpler: like 'view' — a small label on the left, small icons on the right, no names,
+   no boxes around the shapes, no read-outs */
+body[data-page="cross"] #leftmods .node.tool {
+  display: flex !important; align-items: flex-start; gap: 4px; width: auto !important; padding: 6px 6px 6px 10px !important;
+}
+body[data-page="cross"] #leftmods .node.tool .hdr { margin-top: 3px; }
+body[data-page="cross"] #leftmods .node.tool .tab { padding: 0 6px 0 0 !important; }
+body[data-page="cross"] #leftmods .node.tool .value,
+body[data-page="cross"] #leftmods .node.tool .pick-name,
+body[data-page="cross"] #leftmods .node.tool .forms span { display: none !important; }
+body[data-page="cross"] #leftmods .node.tool .card { padding: 0 !important; }
+body[data-page="cross"] #leftmods .shp .forms { grid-template-columns: repeat(3, 26px) !important; gap: 2px !important; }
+body[data-page="cross"] #leftmods .shp .forms button { width: 26px; height: 24px !important; border-radius: 6px !important; padding: 0 !important; }
+body[data-page="cross"] #leftmods .shp .forms svg { width: 16px !important; height: 16px !important; stroke-width: 1.3 !important; }
+body[data-page="cross"] #leftmods .node.tool .picker { grid-template-columns: 12px 44px 12px !important; gap: 2px; }
+body[data-page="cross"] #leftmods .node.tool .viz svg { width: 44px; height: 33px; display: block; }
+body[data-page="cross"] #leftmods .node.tool .arrow { font-size: 13px; padding: 0; }
+body[data-page="cross"] #leftmods .spk .card { display: flex; align-items: center; gap: 6px; }
+body[data-page="cross"] #leftmods .spk .seg.types { margin-top: 0 !important; display: flex; gap: 2px; }
+body[data-page="cross"] #leftmods .spk .seg.types button { padding: 3px 7px !important; font-size: 11px; border-radius: 999px !important; }
+/* (clearer: the root light, every block dark with a dotted line under it, the main one bold) */
+#promptline .pl-root { color: #a29e96; }
+#promptline .pl-rest { color: var(--ink); border-bottom: 1px dotted #a29e96; }
+#promptline .pl-main { border-bottom: 1px dotted var(--ink); }
+
+/* the prompt: every feature alike (the main one too) */
+#promptline .pl-main { color: var(--ink); font-weight: 400; border-bottom: 1px dotted #a29e96; }
+
+/* the left modifiers: the screen and the speaker centred between their arrows */
+body[data-page="cross"] #leftmods .node.tool .picker { display: grid !important; grid-template-columns: 14px 44px 14px !important; align-items: center; justify-items: center; }
+body[data-page="cross"] #leftmods .node.tool .viz { padding: 0 !important; margin: 0 !important; width: 44px; display: grid; place-items: center; }
+body[data-page="cross"] #leftmods .node.tool .viz svg { width: 40px !important; height: 30px !important; margin: 0 !important; }
+body[data-page="cross"] #leftmods .node.tool .arrow { width: 14px; text-align: center; }
+
+/* a white swatch shows its edge */
+button.sw[style*="#ffffff"] { box-shadow: inset 0 0 0 1px var(--hair); }
+
+/* flat hd 2: the parts' fill / outline and their lines broken / whole, each a pill (grouped with the parts) */
+.flatpill {
+  position: fixed; right: 20px; bottom: 100px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2 .flatpill { display: flex; }
+.flatpill .lbl { margin-right: 4px; }
+.flatpill button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+.flatpill button:hover { color: var(--ink-strong); }
+.flatpill button.on { color: var(--bg-center); background: var(--ink); }
+
+/* the prompt: no underlines */
+#promptline .pl-rest, #promptline .pl-main { border-bottom: 0 !important; text-decoration: none !important; }
+/* 'hide' hides only the right column: the prompt and the left modifiers stay */
+
+/* the cross page: minimal sliders — a thin line and a small circle */
+body[data-page="cross"] input[type="range"] {
+  -webkit-appearance: none; appearance: none; height: 14px; background: transparent; margin: 0 4px; cursor: pointer;
+}
+body[data-page="cross"] input[type="range"]::-webkit-slider-runnable-track { height: 1px; background: var(--ink-soft); border: 0; }
+body[data-page="cross"] input[type="range"]::-moz-range-track { height: 1px; background: var(--ink-soft); border: 0; }
+body[data-page="cross"] input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 9px; height: 9px; margin-top: -4px; border-radius: 50%;
+  background: var(--ink); border: 0;
+}
+body[data-page="cross"] input[type="range"]::-moz-range-thumb { width: 9px; height: 9px; border-radius: 50%; background: var(--ink); border: 0; }
+body[data-page="cross"] input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.2); }
+body[data-page="cross"] input[type="range"]:focus { outline: none; }
+
+/* density: no transition options (it is always 'free', subtly) */
+body[data-page="cross"].mode-density #denstrans { display: none !important; }
+
+/* pegboard: the body's brightness */
+#crossbright {
+  position: fixed; right: 20px; bottom: 900px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body[data-page="cross"].mode-cross #crossbright { display: flex; }
+#crossbright input { width: 110px; }
+
+/* the cross page: no hide arrow top right — a small 'drag to rotate' instead (all three views) */
+body[data-page="cross"] #viewctl-toggle { display: none !important; }
+#draghint {
+  position: fixed; top: 26px; right: 22px; z-index: 3; font-size: 11px; color: var(--ink-soft); pointer-events: none;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+/* the cross page: no 'tools' box top left, no 'drag to rotate' */
+body[data-page="cross"] #tools-toggle, #draghint { display: none !important; }
+
+/* hover a modifier: what it does, in a small box top right */
+#modtip {
+  position: fixed; right: 20px; top: 20px; z-index: 20; max-width: 268px; padding: 6px 10px; pointer-events: none;
+  font-size: 11px; line-height: 1.4; color: var(--ink); background: var(--surface); border: 1px solid var(--hair);
+  border-radius: 8px; box-shadow: 0 4px 14px rgba(40, 36, 30, 0.08); opacity: 0; transition: opacity 0.15s;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+#modtip.on { opacity: 1; }
+/* …as plain text, no box */
+#modtip { background: none; border: 0; box-shadow: none; padding: 0; text-align: right; color: var(--ink-soft); }
+/* the cross page: no log (bottom left) */
+body[data-page="cross"] #toolbox { display: none !important; }

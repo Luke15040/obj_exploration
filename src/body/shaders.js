@@ -1,5 +1,5 @@
-import { speakerHolesGLSL } from './glsl-speaker.js?v=202610080154';
-import { partsGLSL } from './glsl-parts.js?v=202610080154';
+import { speakerHolesGLSL } from './glsl-speaker.js?v=202610081559';
+import { partsGLSL } from './glsl-parts.js?v=202610081559';
 
 /**
  * Body shaders (GLSL ES 3.00 / WebGL2).
@@ -674,10 +674,11 @@ uniform vec3  uFBlue;
 uniform vec3  uFGreen;
 uniform vec3  uFOrange;
 uniform vec3  uTypeColor[13];   // one colour per kind of part (flat view)
+uniform vec3  uTypeLine[13];    // flat hd 2, parts as outlines: their line colour (the same scale, deeper — readable as a line)
 uniform float uSketch;          // 1 = hand-drawn grain and wobble ("flat"), 0 = clean ("flat 2")
 uniform float uAnim;            // 1 = flat hd 2: after a view change the contour draws itself in
 uniform float uOutT;            // flat hd 2: a drag began — the contour un-draws along the same pen path (0 = all there)
-uniform float uGuide;           // flat hd 2: 0 at rest · 1 while it turns — the shape as a shaky grey pencil line
+uniform float uGuide;           // flat hd 2: 0 at rest · 1 while it turns — the shape as a shaky warm-grey pencil line (eased from outside: no cuts)
 uniform float uGuideW;          // device px per css px (the shake's size)
 uniform float uUnfinished;      // flat hd 2: 1 = the drawing left unfinished (gaps in the lines, on the shape)
 uniform float uLineGrey;        // flat hd 2: 1 = the lines in grey pencil (not the coloured crayons)
@@ -697,8 +698,16 @@ uniform sampler2D uStroke;      // when the pen passes each spot (strokes.js)
 uniform float uStrokeK;
 uniform sampler2D uG;           // flat hd 2: flat g-buffer with face classes (the corners)
 uniform float uLineW;
+uniform vec3  uOutsideCol;      // flat hd 2: the outside's colour (screen, knob caps, speaker holes) — the outline's, or another
+uniform vec3  uOutline;         // the drawing's colour: the outline and everything outside (flat hd 2: chosen; else red)
+uniform float uSkinFill;        // flat hd 2: a see-through fill on the shape's surfaces, in the outline's colour (0 = none)
+uniform float uShade;           // flat hd 2: 1 = the shade on faces seen almost edge-on (axonometric views) · 0 = none
+uniform float uPartsBroken;     // flat hd 2: 1 = the parts' outlines broken like the drawing (unfinished) · 0 = whole
+uniform float uThin;            // flat hd 2: the line's weight (1 = as drawn; under 1 the 1-px lines fade instead)
 
 float grain(vec2 px) { return hash(floor(px)); }
+// flat hd 2: the knobs' line weight — a touch thinner than the shape's, and it follows the slider only a little
+float knobThin() { return 0.85 * (1.0 + 0.35 * (uThin - 1.0)); }
 
 // flat hd 2: when the pen passed this spot (0..1 of the drawing)
 float penT(vec2 px) {
@@ -717,6 +726,12 @@ float penNear(vec2 px) {
 }
 const vec3 PENCIL = vec3(0.55, 0.535, 0.51);
 vec3 lineInk(vec3 c) { return mix(c, PENCIL, uLineGrey); }
+// flat hd 2: how much of the coloured drawing is there at a spot the pen reaches at pt — a soft head, not a cut —
+// and all of it fading out as the turning pencil takes over (uGuide eases, so the outline leaves smoothly)
+float drawnAt(float pt) {
+  float d = uDrawT >= 1.0 ? 1.0 : uDrawT <= 0.0 ? 0.0 : smoothstep(pt - 0.06, pt, uDrawT);
+  return d * (1.0 - uGuide);
+}
 // …and how much of the line is left there while it un-draws (a drag began): first drawn, first gone
 float undraw(vec2 px) {
   return uOutT > 0.0 ? smoothstep(uOutT, uOutT + 0.05, penT(px)) * (1.0 - smoothstep(0.92, 1.0, uOutT)) : 1.0;
@@ -734,7 +749,7 @@ bool screenOnFace(vec3 q, int type) {
   return false;
 }
 
-vec3 screenFace(vec3 q, int type, vec3 fill) {
+vec3 screenFace(vec3 q, int type, vec3 fill, bool tint) {
   if (type == 6 && q.z > 1.4 && abs(q.x) < 19.8 && abs(q.y) < 13.8) {
     vec2 cell = clamp(floor((q.xy + vec2(19.5, 13.5)) / 3.0), vec2(0.0), vec2(12.0, 8.0));
     vec2 c = q.xy - (cell * 3.0 - vec2(18.0, 12.0));
@@ -747,9 +762,25 @@ vec3 screenFace(vec3 q, int type, vec3 fill) {
     if (abs(a.x) > 17.25 || abs(a.y) > 11.5) return fill;
     float eyes = max(abs(abs(a.x) - 6.0) - 1.6, abs(a.y - 2.5) - 2.2);
     float smile = max(abs(length(a - vec2(0.0, 3.0)) - 7.5) - 0.7, a.y + 1.5);
+    if (tint) return min(eyes, smile) < 0.0 ? mix(fill, uFInk, 0.7) : mix(fill, uFInk, 0.1);   // in the drawing's colour (outside)
     return min(eyes, smile) < 0.0 ? vec3(0.97) : uFInk;                   // white pixels on the dark glass
   }
   return fill;
+}
+
+/** The library parts and cables along a ray (the first one hit). */
+void marchParts(vec3 ro, vec3 rd, float t0, float tEnd, out float tp, out int idx, out bool hitP, out bool isCable, out float cableAlb) {
+  tp = t0; idx = 0; hitP = false; isCable = false; cableAlb = 0.0;
+  for (int i = 0; i < 80; i++) {
+    vec3 q = ro + rd * tp;
+    float e = partsSDF(q, idx);
+    vec2 cb = cablesSDF(q);
+    bool c = cb.x < e;
+    e = min(e, cb.x);
+    if (e < 0.05) { hitP = true; isCable = c; cableAlb = cb.y; break; }
+    tp += max(e, 0.05);
+    if (tp > tEnd) break;
+  }
 }
 
 void main() {
@@ -771,10 +802,10 @@ void main() {
   // the hand's wobble stays put on the drawing (unfinished); what moves is only a small, slow tremor
   // ('alive', a touch with 'unfinished') — and the turning pencil (guide)
   float shakeFix = uUnfHand * uUnfinished;
-  float shakeLive = uGuide + 0.5 * uAlive + 0.12 * uUnfinished;
+  float shakeLive = 0.5 * uAlive + 0.12 * uUnfinished;   // (no extra shake while it turns: the pencil stays calm)
   if (uAnim > 0.5 && shakeFix + shakeLive > 0.0) {
     vec2 js = vec2(noise3(vec3(px * 0.016, 0.0)), noise3(vec3(px * 0.016 + 9.7, 0.0))) - 0.5;
-    float tl = uTime * (uGuide > 0.0 ? 2.2 : 1.1);
+    float tl = uTime * 1.1;   // (one pace: changing it mid-way made the line jump)
     vec2 jl = vec2(noise3(vec3(px * 0.016, tl)), noise3(vec3(px * 0.016 + 9.7, tl))) - 0.5;
     vec2 jt = (js * min(shakeFix, 1.4) + jl * min(shakeLive, 1.4)) * 3.2 * uGuideW;
     vec2 ow = (px + jt - uCenterDev) / uFocal;
@@ -797,16 +828,18 @@ void main() {
   int idx = 0;
   bool hitP = false, isCable = false;
   float cableAlb = 0.0;
-  for (int i = 0; i < 80; i++) {
-    vec3 q = ro + rd * tp;
-    float e = partsSDF(q, idx);
-    vec2 cb = cablesSDF(q);
-    bool c = cb.x < e;
-    e = min(e, cb.x);
-    if (e < 0.05) { hitP = true; isCable = c; cableAlb = cb.y; break; }
-    tp += max(e, 0.05);
-    if (tp > tEnd) break;
+  // flat hd 2: the g-buffer drawn just before holds the very same march (same rays, same parts):
+  // read which part is seen here instead of marching again — but for the screens, whose face
+  // needs the hit point itself (a small area: marched as before)
+  // (one call only: the compiler inlines the whole march — with every part's model — at each call)
+  bool march = uAnim < 0.5;
+  if (uAnim > 0.5) {
+    float gid = floor(texelFetch(uG, ivec2(px), 0).b * 255.0 + 0.5);
+    if (gid >= 40.0 && uPartType[int(gid) - 40] != 6 && uPartType[int(gid) - 40] != 11) { hitP = true; idx = int(gid) - 40; }
+    else if (gid >= 20.0 && gid < 40.0) { hitP = true; isCable = true; cableAlb = gid - 20.0; }
+    else if (gid >= 40.0) march = true;
   }
+  if (march) marchParts(ro, rd, t0, tEnd, tp, idx, hitP, isCable, cableAlb);
   vec4 col = vec4(0.0), inner = vec4(0.0);
   bool outside = false;   // (flat hd 2: the screen's face is on the outside)
   if (hitP) {
@@ -821,8 +854,8 @@ void main() {
       // the screen shows what it shows (else it's just a rectangle: which part is it?)
       if (uAnim > 0.5 && (uPartType[idx] == 6 || uPartType[idx] == 11)) {
         vec3 qs = transpose(uPartR[idx]) * (ro + rd * tp - uPartC[idx]);
-        fill = screenFace(qs, uPartType[idx], fill);
         outside = screenOnFace(qs, uPartType[idx]);
+        fill = screenFace(qs, uPartType[idx], outside ? lineInk(uOutsideCol) : fill, outside);   // (outside: in the outline's colour, like all the outside)
       }
     }
     float a = isCable ? mix(1.0, 0.75 + 0.25 * grain(px * 0.7), uSketch) : 1.0;
@@ -832,10 +865,40 @@ void main() {
     else col = vec4(fill * a, a);
   }
 
+  // flat hd 2: the shape's surfaces filled in the outline's colour, as see-through as the slider says
+  // (over the parts inside, under the outside and the lines; g-buffer: 1 = the skin)
+  if (uAnim > 0.5 && uSkinFill > 0.0 && uGuide < 0.999) {
+    bool skinHere = mod(floor(texelFetch(uG, ivec2(px), 0).r * 255.0 + 0.5), 10.0) == 1.0;
+    float drawnF = drawnAt(penT(px));   // (it comes in with the drawing, leaves with it)
+    // a crayon's feel, like the lines: its grain and a hand's unevenness, lightly
+    float crayon = (0.74 + 0.26 * grain(px * 1.3)) * (0.86 + 0.28 * noise3(vec3(px * 0.012, 3.1)));
+    float sa = skinHere ? uSkinFill * drawnF * undraw(px) * crayon : 0.0;
+    col = col * (1.0 - sa) + vec4(lineInk(uOutline) * sa, sa);
+  }
+
+  // flat hd 2: the outside reads clearly, all of it in the outline's colour — the knob caps and the speaker's
+  // holes filled in it, see-through, the caps with a clean, whole line where they end (g-buffer: 3 = caps, 5 = holes)
+  if (uAnim > 0.5 && uOutsideA > 0.01 && uGuide < 0.999) {
+    ivec2 pk = ivec2(px), glk = textureSize(uG, 0) - 1;
+    float sk0 = mod(floor(texelFetch(uG, pk, 0).r * 255.0 + 0.5), 10.0);
+    bool cap = sk0 == 3.0;
+    bool rim = false;
+    for (int k = 0; k < 8; k++) {
+      float an = float(k) * 0.7853982;
+      bool nc = mod(floor(texelFetch(uG, clamp(pk + ivec2(round(vec2(cos(an), sin(an)) * max(1.0, 0.8 * uLineW * knobThin() / max(uThin, 0.01)))), ivec2(0), glk), 0).r * 255.0 + 0.5), 10.0) == 3.0;
+      if (nc != cap) { rim = true; break; }
+    }
+    float drawnK = drawnAt(penT(px));   // (it draws in, and leaves, with the rest)
+    float fa = cap || sk0 == 5.0 ? 0.28 * uOutsideA * drawnK * undraw(px) : 0.0;
+    col = col * (1.0 - fa) + vec4(lineInk(uOutsideCol) * fa, fa);
+    float ra = rim ? uOutsideA * drawnK * undraw(px) * min(1.0, uThin) : 0.0;
+    col = col * (1.0 - ra) + vec4(lineInk(uOutsideCol) * ra, ra);
+  }
+
   // 3) the skin's contour, drawn on top like a coloured line on paper
   float fp = (hitS ? t : tMin) / uFocal;                       // mm per device px
   float wob = mix(1.0, 0.75 + 0.5 * noise3(vec3(px * 0.05, 0.0)), uSketch); // hand-drawn width wobble
-  float w = 1.8 * fp * wob;
+  float w = 1.8 * fp * wob * uThin;
   float edge = 0.0;
   vec3 pe = ro + rdS * (hitS ? t : tMin);
   if (!hitS) {
@@ -846,6 +909,8 @@ void main() {
     edge = 1.0 - smoothstep(0.16, 0.26 * wob, g);              // where the surface turns away
     // flat hd 2 while it turns: only the outline — the broad bands of faces seen edge-on go (they read as shadows)
     if (uAnim > 0.5) edge *= 1.0 - smoothstep(0.0, 0.2, uGuide);
+    // flat hd 2: the shadow on a face seen almost edge-on, lighter (the very rim, where it turns away, stays full)
+    if (uAnim > 0.5) edge *= mix(0.4 * uShade, 1.0, 1.0 - smoothstep(0.03, 0.09, g));   // (shade off: only the very rim)
   }
   // flat hd 2, 'unfinished': the lines stop and start again along the shape (gaps that stay on it as it turns)
   // (always changing: the gaps slide along the shape and open / close as their clock runs)
@@ -869,36 +934,56 @@ void main() {
     float ei;
     float dk = extrasSDF(pe, ei);
     float ds = bodySDF(pe);
-    vec3 lc = uFRed;
+    vec3 lc = uOutline;   // (flat hd 2: the colour chosen for the drawing; else red, as before)
+    bool knob = false;
     if (dw < ds && dw < dk) lc = uFBlue;                       // wheels
-    else if (dk < ds) { lc = uFGreen; if (uAnim > 0.5) edge *= uOutsideA; }   // knob caps (outside)
-    edge *= mix(1.0, 0.55 + 0.45 * grain(px * 1.3), uSketch);                   // crayon grain
-    edge *= mix(1.0, step(0.08, grain(px * 0.9 + 17.0)), uSketch);              // a few missing specks
+    else if (dk < ds) { lc = uAnim > 0.5 ? uOutsideCol : uFGreen; knob = uAnim > 0.5; if (uAnim > 0.5) edge *= uOutsideA; }   // knob caps (outside; flat hd 2: the outline's colour)
+    // flat hd 2: the knobs' contour a touch thinner, and growing much less with the thickness slider
+    if (knob && !hitS) { float wK = 1.8 * fp * wob * knobThin(); edge = (1.0 - smoothstep(wK * 0.5, wK, minD)) * uOutsideA; }
+    if (!knob) edge *= mix(1.0, 0.55 + 0.45 * grain(px * 1.3), uSketch);        // crayon grain (flat hd 2: the knobs stay crisp)
+    // a few missing specks (not on the faces seen edge-on in flat hd 2: those read as shadows, they stay whole)
+    edge *= mix(1.0, step(0.08, grain(px * 0.9 + 17.0)), uSketch * ((hitS || knob) && uAnim > 0.5 ? 0.0 : 1.0));
     if (uAnim > 0.5) {
       // how much of the coloured line is there: none while it turns, then where the pen has passed
-      float drawn = uGuide > 0.999 ? 0.0 : uDrawT >= 1.0 ? 1.0 : (uDrawT > 0.0 && uDrawT >= penT(px) ? 1.0 : 0.0);
-      float cl = drawn * undraw(px);
+      float cl = drawnAt(penT(px)) * undraw(px);
       // under it, the grey pencil: a part of the shape (patches that stick to it as it turns),
       // while it turns and wherever the colour isn't (yet / any more)
       // a thin, sketchy line: pencil grain along it, a few breaks, as if it were being drawn again
-      float patchy = smoothstep(0.32, 0.52, noise3(pe * 0.045));
-      float gd = min(1.0, edge * 1.7) * 0.95 * patchy * (1.0 - cl) * (0.45 + 0.55 * grain(px * 0.8)) * step(0.12, grain(px * 0.6 + 5.0));
-      col = col * (1.0 - gd) + vec4(vec3(0.42, 0.41, 0.39), 1.0) * gd;
-      edge *= cl * unf;
+      float patchy = smoothstep(0.3, 0.55, noise3(pe * 0.045 + vec3(0.0, 0.0, uTime * 0.15)));   // (in pieces, its gaps drift)
+      // (its grain and breaks sit on the shape, not on the screen: they travel with it instead of flickering)
+      float gd = min(1.0, edge * 1.4) * 0.55 * patchy * (1.0 - cl) * (0.3 + 0.7 * hash(floor(pe.xy * 1.6) + floor(pe.z * 1.6) * 13.7)) * step(0.2, hash(floor(pe.xy * 0.9) + floor(pe.z * 0.9) * 7.3 + 5.0));   // (light, loose: a hint of the shape)
+      gd *= hitS ? 0.0 : 1.0;   // (the outline only: no shadows while it turns)
+      col = col * (1.0 - gd) + vec4(vec3(0.53, 0.5, 0.46), 1.0) * gd;   // a warm grey (look a)
+      edge *= cl * (hitS || knob ? 1.0 : unf);   // (the shadows and the knobs: whole, not cut into the unfinished strokes)
     }
     col = col * (1.0 - edge) + vec4(lineInk(lc), 1.0) * edge;
+  }
+  // flat hd 2 while it turns: the warm-grey pencil goes over the outline again — two more strokes just off it,
+  // broken, wobbling slowly so they cross it now and then, like a hand sketching the shape as it turns
+  if (uAnim > 0.5 && !hitS && uGuide > 0.01) {
+    float gx = 0.0;
+    float wv = noise3(pe * 0.035 + vec3(0.0, 0.0, uTime * 0.3)), br = noise3(pe * 0.05 + vec3(3.3, 7.0, uTime * 0.25));
+    for (int k = 1; k <= 2; k++) {
+      float fk = float(k);
+      float off = (0.4 + 2.4 * (fk < 1.5 ? wv : 1.0 - wv)) * fk * uGuideW * fp;
+      float r = 1.0 - smoothstep(w * 0.15, w * 1.0, abs(minD - off));   // (soft-edged)
+      r *= step(0.5, (fk < 1.5 ? br : 1.0 - br));   // broken strokes
+      gx = max(gx, r * (0.45 - 0.12 * fk));   // (faint)
+    }
+    gx *= uGuide * (0.55 + 0.45 * hash(floor(pe.xy * 1.6) + floor(pe.z * 1.6) * 13.7));
+    col = col * (1.0 - gx) + vec4(vec3(0.53, 0.5, 0.46), 1.0) * gx;
   }
   // unfinished: some strokes drawn twice — a second, lighter line a little outside the first (a hand going over it again)
   if (uAnim > 0.5 && uUnfinished > 0.0 && !hitS && uGuide < 0.999) {
     float pt = penNear(px);
-    if (pt > 0.0 && (uDrawT >= 1.0 || uDrawT >= pt)) {
+    if (pt > 0.0 && drawnAt(pt) > 0.0) {
       float idx = floor(pt * 46.0), f = fract(pt * 46.0);
       float twice = step(1.0 - uUnfTwice, hash(vec2(idx, 9.1)));   // (the retraced slider)
       float off = (2.0 + 3.5 * hash(vec2(idx, 4.2))) * uGuideW * fp;   // mm: how far off the second pass runs
       float r2 = (1.0 - smoothstep(w * 0.3, w * 0.75, abs(minD - off))) * twice;
       r2 *= smoothstep(0.1, 0.3, f) * smoothstep(1.0, 0.75, f);           // shorter than the stroke it doubles
-      r2 *= undraw(px) * uUnfinished * 0.5;
-      col = col * (1.0 - r2) + vec4(lineInk(uFRed), 1.0) * r2;
+      r2 *= undraw(px) * uUnfinished * 0.5 * drawnAt(pt);
+      col = col * (1.0 - r2) + vec4(lineInk(uOutline), 1.0) * r2;
     }
   }
   // flat hd 2: the corners (where the faces turn), a lighter crayon, after the profile
@@ -917,8 +1002,8 @@ void main() {
     }
     if (crease) {
       float ts = uDrawT < 1.0 ? texelFetch(uStroke, clamp(ivec2(px * uStrokeK), ivec2(0), textureSize(uStroke, 0) - 1), 0).r : 0.0;
-      float a = (uDrawT >= ts ? 1.0 : 0.0) * mix(1.0, 0.55 + 0.45 * grain(px * 1.3), uSketch) * undraw(px) * (uGuide > 0.999 ? 0.0 : 1.0) * unf;
-      col = mix(col, vec4(lineInk(mix(uFRed, vec3(1.0), 0.35)), 1.0), a);
+      float a = drawnAt(ts) * mix(1.0, 0.55 + 0.45 * grain(px * 1.3), uSketch) * undraw(px) * unf;
+      col = mix(col, vec4(lineInk(mix(uOutline, vec3(1.0), 0.35)), 1.0), a * min(1.0, uThin));
     }
   }
   // flat hd 2: the speaker holes (their walls have their own id in the g-buffer), in the same crayon
@@ -934,13 +1019,13 @@ void main() {
     }
     if (hole) {
       float ts = uDrawT < 1.0 ? texelFetch(uStroke, clamp(ivec2(px * uStrokeK), ivec2(0), textureSize(uStroke, 0) - 1), 0).r : 0.0;
-      float a = (uDrawT >= ts ? 1.0 : 0.0) * mix(1.0, 0.6 + 0.4 * grain(px * 1.3), uSketch) * undraw(px) * (uGuide > 0.999 ? 0.0 : 1.0) * uOutsideA;
-      col = mix(col, vec4(lineInk(uFRed), 1.0), a * 0.85);
+      float a = drawnAt(ts) * mix(1.0, 0.6 + 0.4 * grain(px * 1.3), uSketch) * undraw(px) * uOutsideA;
+      col = mix(col, vec4(lineInk(uOutsideCol), 1.0), a * 0.85 * min(1.0, uThin));
     }
   }
   // flat hd 2, parts as outlines: where one part (or a cable) meets another or the background, the same
   // pencil — each part in its own colour (or grey), with the drawing's gaps when unfinished
-  if (uAnim > 0.5 && uPartsLine > 0.5 && uGuide < 0.999) {
+  if (uAnim > 0.5 && uPartsLine > 0.5) {   // (always: while it turns too, like the filled parts)
     ivec2 pp = ivec2(px);
     ivec2 gl3 = textureSize(uG, 0) - 1;
     float pid = floor(texelFetch(uG, pp, 0).b * 255.0 + 0.5);
@@ -952,13 +1037,15 @@ void main() {
     }
     if (other >= 0.0) {
       float who = max(pid, other);
-      vec3 pc = who >= 40.0 ? uTypeColor[uPartType[int(who) - 40]] : uFBlue;
-      float a = mix(1.0, 0.55 + 0.45 * grain(px * 1.3), uSketch) * undraw(px) * uInsideA;
-      if (uUnfinished > 0.0) {
+      vec3 pc = who >= 40.0 ? uTypeLine[uPartType[int(who) - 40]] / 0.85 : uFBlue;
+      bool lit = who >= 40.0 && int(who) - 40 == uHi && dot(uHiCol, vec3(1.0)) > 0.0;
+      if (lit) pc = uHiCol / 0.85;   // (a node hovered: its colour)
+      float a = mix(1.0, 0.55 + 0.45 * grain(px * 1.3), uSketch) * (lit ? 1.0 : sqrt(uInsideA));   // (a line: a low inside still lets its colour read; lit: whole)
+      if (uUnfinished > 0.0 && uPartsBroken > 0.5) {
         float ci = hash(floor(px / (16.0 * uGuideW)) + floor(uUnfT * 0.6) * 3.7);   // dashes of a hand, not of the pen's path
         a *= mix(1.0, step(0.6 * uUnfGaps * 0.7, ci), uUnfinished);
       }
-      col = mix(col, vec4(lineInk(pc * 0.85), 1.0), a);
+      col = mix(col, vec4(lineInk(pc * 0.85), 1.0), a * min(1.0, uThin));
     }
   }
   outColor = col * uAlpha;
@@ -1284,6 +1371,7 @@ export const flat2GbufferShader = levelCommon + /* glsl */ `
 uniform float uNear;
 uniform float uFar;
 uniform float uFaces;     // 1 = skin id += 10 × face class (flat hd creases)
+uniform float uPartsOff;  // 1 = the skin only (the parts' channels are kept from before: they are masked off)
 
 float simpleWheel(vec3 q) {
   vec2 d = vec2(length(q.yz) - 45.0, abs(q.x) - 15.0);
@@ -1343,6 +1431,7 @@ void main() {
   float tp = t0;
   int idx = 0;
   for (int i = 0; i < 80; i++) {
+    if (uPartsOff > 0.5) break;
     vec3 q = ro + rd * tp;
     float e = partsSDF(q, idx);
     vec2 cb = cablesSDF(q);
@@ -2708,17 +2797,37 @@ uniform vec2  uGridOff;
 uniform sampler2D uP;        // full-res flat g-buffer: which part is seen where (for the outlines)
 uniform float uLineW;
 uniform vec3  uLineCol;
+uniform float uLineA;        // the outlines' opacity
 uniform int   uShowSil;      // 1 = the object's outline
 uniform int   uShowParts;    // 1 = the parts' outlines
+uniform float uGrainPx;      // the grain's own scale (≈ 1.2 css px in device px) — not tied to the lines' thickness
+uniform float uLineByPart;   // 1 = the parts' outlines each in its part's colour
 uniform int   uPass;         // 0 = the density field, blended with last frame's (a fluid with memory) · 1 = draw
 uniform sampler2D uPrev;     // pass 0: last frame's field · pass 1: this frame's field
 uniform float uK;            // pass 0: how much of the new field goes in this frame (1 = no memory)
-uniform int   uStyle;        // 0 = bands (contour map) · 1 = a soft ball: one smooth gradient, a soft edge
+uniform int   uStyle;        // 0 = bands (contour map) · 1 = a soft ball: one smooth gradient, a soft edge · 2 = grainy (stippled, like risograph / airbrush grain)
 uniform float uInsideA;      // the parts inside, seen through the ball (0 = hidden in it)
 uniform vec3  uTypeColor[13]; // the parts' colours (one per kind)
 uniform float uFrost;         // the frost slider: the parts inside, blurred as through frosted glass
 uniform float uOutsideA;     // the outside on top, crisp: knob caps, speaker holes, the screen's face
+uniform int   uPartLook;     // the parts inside, as in cross: 0 real · 1 grey · 2 flat · 3 colour · 4 outline · 5 tiles
+uniform sampler2D uParts;    // pass 1: the parts layer (pass 2 draws it, only when the scene changes), premultiplied
+uniform float uShapeA;       // how solid the shape is (0 = clear … 1 = as it was)
+uniform vec2  uHover;        // the cursor, device px
+uniform float uHoverAmt;     // 0 … 1: the cursor over the page (eased) — the shape swells gently toward it
+uniform vec3  uDOut;         // the outside's colour (knob caps, speaker holes, the screen), when tinted
+uniform float uDOutTint;     // 0 = the outside as it is (real) · 1 = in uDOut
+uniform vec3  uHiCol;        // the hovered node's colour (its part lights up in it), 0 = none
 float unpackD(vec4 t) { return t.r + t.g / 255.0; }
+// grainy: a well-mixed integer hash (the float one streaks at this density)
+float ihash(vec2 p, float s) {
+  uvec3 v = uvec3(ivec3(int(p.x), int(p.y), int(s)) + 32768);
+  v = v * 1664525u + 1013904223u;
+  v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+  v ^= v >> 16u;
+  v.x += v.y * v.z;
+  return float(v.x >> 8u) / 16777216.0;
+}
 vec4 packD(float d) { d = clamp(d, 0.0, 0.9999) * 255.0; return vec4(floor(d) / 255.0, fract(d), 0.0, 1.0); }
 // the library parts, high fidelity: real colours, lit
 vec4 realPart(vec3 ro, vec3 rd, float t, float tEnd, out float dist) {
@@ -2757,6 +2866,7 @@ vec4 realPart(vec3 ro, vec3 rd, float t, float tEnd, out float dist) {
 
 void drawMain(vec2 px);
 
+
 void main() {
   vec2 px = gl_FragCoord.xy;
   if (uPass == 1) { drawMain(px); return; }
@@ -2780,6 +2890,9 @@ void main() {
     dsum += uRectW[i] * exp(-dist * dist / (2.0 * uSigma * uSigma));
   }
   float partsD = 1.0 - exp(-dsum * 0.9);                    // saturates where the parts crowd
+  // the cursor over the shape: a gentle swell toward it (only on and around the shape, not on the empty page)
+  vec2 hm = px - uHover;
+  float hv = uHoverAmt * exp(-dot(hm, hm) / (3.2 * uSigma * uSigma));
 
   // the shape itself, blurred: so the outer bands follow the object's silhouette
   ivec2 lim = textureSize(uG, 0) - 1;
@@ -2799,6 +2912,7 @@ void main() {
   skin /= 16.0; up /= 16.0; side /= 16.0;
   // the faces bend the bands: tops rise, sides sink — so the volume reads
   float dens = clamp(skin + 0.3 * partsD, 0.0, 1.0);
+  dens = clamp(dens + 0.14 * hv * smoothstep(0.02, 0.3, dens + 0.1 * hv), 0.0, 1.0);
   // the transitions (cross page): condense — the ball draws back into soft halos round the parts, then
   // swells back out; evaporate — it thins into mist (the wider spread is set from outside), then gathers
   if (uTr > 0.0) {
@@ -2818,10 +2932,11 @@ void drawMain(vec2 px) {
   float v = dens * uLevels + (hash(floor(px) + floor(uTime * 8.0 * uMotion) * 13.1) - 0.5) * 0.14 + haze * uHaze;
   float band = floor(v);
   vec4 col = vec4(0.0);
-  if (uStyle == 1) {
+  if (uStyle >= 1) {
     // the soft ball: the pale end of the ramp as one smooth gradient, its edge fading out.
     // The field is sampled with a different twist per pixel (grain): smooth it here as much as asked
-    float sm = (1.0 - uDGrain) * max(3.0, uSigma * 0.18);
+    // (grainy: always smooth — its grain is the stipple below, not the field's)
+    float sm = (uStyle == 2 ? 1.0 : 1.0 - uDGrain) * max(3.0, uSigma * 0.18);
     if (sm > 0.5) {
       ivec2 limS = textureSize(uPrev, 0) - 1;
       float acc = dens;
@@ -2831,8 +2946,9 @@ void drawMain(vec2 px) {
       }
       dens = acc / 13.0;
     }
-    float d = clamp(dens + haze * 0.08 * uDGrain, 0.0, 1.0);
-    float x = 1.0 + clamp(d * 1.3, 0.0, 1.0) * 1.7;
+    float d = clamp(dens + haze * (uStyle == 2 ? 0.05 : 0.08 * uDGrain), 0.0, 1.0);
+    // grainy: the whole ramp — a deep, saturated core sliding out into the pale colours
+    float x = uStyle == 2 ? 1.6 + smoothstep(0.06, 0.6, d) * 3.1 : 1.0 + clamp(d * 1.3, 0.0, 1.0) * 1.7;   // (up to the colour itself: no browns)
     int i0 = int(floor(x));
     vec3 c = mix(uRamp[clamp(i0, 1, 7)], uRamp[clamp(i0 + 1, 1, 7)], fract(x));
     if (uGlow > 0.0) {
@@ -2840,7 +2956,7 @@ void drawMain(vec2 px) {
       // the lower part deepens into the ramp, a thin bright rim along the top edge (broad, no relief)
       ivec2 lim2 = textureSize(uPrev, 0) - 1;
       ivec2 ip = ivec2(px);
-      int r1 = int(max(uSigma * 1.1, 60.0 * uLineW)), r2 = int(max(2.0, uSigma * 0.22));   // (r1: across the whole shape)
+      int r1 = int(max(uSigma * 1.1, 60.0 * uGrainPx)), r2 = int(max(2.0, uSigma * 0.22));   // (r1: across the whole shape)
       float dUp = unpackD(texelFetch(uPrev, clamp(ip + ivec2(-r1 / 3, r1), ivec2(0), lim2), 0));
       float dDn = unpackD(texelFetch(uPrev, clamp(ip - ivec2(-r1 / 3, r1), ivec2(0), lim2), 0));
       float lightT = clamp((dDn - dUp) * 1.5, -1.0, 1.0);        // > 0 toward the top, < 0 toward the bottom
@@ -2853,6 +2969,22 @@ void drawMain(vec2 px) {
       c = lit;
     }
     col = vec4(c, smoothstep(0.05 + 0.12 * (1.0 - uDEdge), 0.2 + 0.3 * uDEdge, d));   // (the edge slider)
+    if (uStyle == 2) {
+      // grainy: every pixel is ink or paper, with the chance of ink = how dense it is there — so the
+      // edge dissolves into scattered specks (refs: grainy gradients, airbrush on paper), and a sparse
+      // halo of pale specks goes on further out. The grain drifts with the motion slider.
+      vec2 gp = floor(px / max(1.0, 0.8 * uGrainPx));                 // one speck ≈ one css px
+      float fr = floor(uTime * 9.0 * uMotion);
+      float n1 = ihash(gp, fr), n2 = ihash(gp, fr + 7919.0), n3 = ihash(gp, 104729.0);
+      float cov = smoothstep(0.04, 0.3 + 0.55 * uDEdge, d);         // the body (the edge slider: how wide it dissolves)
+      float halo = smoothstep(0.05, 0.5 + 0.4 * uDEdge, d) * 0.55; // the pale halo beyond it (none on the empty page)
+      float ink = mix(cov, step(n1, cov), uDGrain);                 // (the grain slider: smooth … all specks)
+      float pale = mix(halo, step(n2, halo), uDGrain) * (1.0 - ink);
+      vec3 cg = c * (1.0 + (n3 - 0.5) * 0.18 * uDGrain);           // a fine grain in the colour itself
+      vec3 ch = mix(uRamp[2], uRamp[3], n3);
+      float a = ink + pale;
+      col = vec4(a > 0.0 ? (cg * ink + ch * pale) / a : c, a);
+    }
   } else if (band >= 1.0) {
     int bi = int(min(band, 7.0));
     col = vec4(uRamp[clamp(int(floor(float(bi) * 7.0 / max(uLevels, 1.0) + 0.5)), 1, 7)], 1.0);   // fewer, wider bands keep the full ramp
@@ -2864,19 +2996,33 @@ void drawMain(vec2 px) {
   ivec2 plim = textureSize(uP, 0) - 1;
   float pid = floor(texelFetch(uP, pp, 0).b * 255.0 + 0.5);
   bool line = false;
+  vec3 lineC = uLineCol;
+  float lineA = uLineA;
   for (int k = 0; k < 8; k++) {
+    if (uShowParts != 1) break;   // (off: no need to look around)
     float an = float(k) * 0.7853982;
     float npid = floor(texelFetch(uP, clamp(pp + ivec2(round(vec2(cos(an), sin(an)) * uLineW)), ivec2(0), plim), 0).b * 255.0 + 0.5);
-    if (uShowParts == 1 && npid != pid && max(npid, pid) >= 40.0) { line = true; break; }   // part edges (not the cables' own)
+    if (npid != pid && max(npid, pid) >= 40.0) {   // part edges (not the cables' own)
+      line = true;
+      int w = int(max(npid, pid)) - 40;
+      if (uLineByPart > 0.5) lineC = uTypeColor[uPartType[w]] * 0.85;
+      if (w == uHi && dot(uHiCol, vec3(1.0)) > 0.0) { lineC = uHiCol; lineA = 1.0; }   // (a node hovered: its part lights up)
+      break;
+    }
   }
   // …and the object's own outline: where the shape ends (body, wheels, knob caps)
   float sid0 = floor(texelFetch(uP, pp, 0).r * 255.0 + 0.5);
   for (int k = 0; k < 8; k++) {
+    if (uShowSil != 1) break;
     float an = float(k) * 0.7853982;
     float nsid = floor(texelFetch(uP, clamp(pp + ivec2(round(vec2(cos(an), sin(an)) * uLineW)), ivec2(0), plim), 0).r * 255.0 + 0.5);
     if (uShowSil == 1 && (nsid == 0.0) != (sid0 == 0.0)) { line = true; break; }
   }
-  if (line) col = vec4(uLineCol, 1.0);
+  // …and where the cursor is, the shape lightens a touch
+  vec2 hm2 = px - uHover;
+  col.rgb = mix(col.rgb, vec3(1.0), 0.1 * uHoverAmt * exp(-dot(hm2, hm2) / (3.2 * uSigma * uSigma)));
+  col.a *= uShapeA;   // (the transparency slider: the shape only, not the outlines)
+  if (line) col = vec4(mix(col.rgb, lineC, lineA), max(col.a, lineA));   // (as solid as the slider says)
   vec4 pm = vec4(col.rgb * col.a, col.a);   // premultiplied from here on
 
   // the camera ray (for what is inside and what is outside)
@@ -2900,15 +3046,13 @@ void drawMain(vec2 px) {
         if (k >= taps) break;
         float a = float(k) * 2.39996, rr = fr * sqrt((float(k) + 0.5) / 20.0);
         ivec2 sp = clamp(ivec2(px + (taps > 1 ? vec2(cos(a), sin(a)) * rr : vec2(0.0))), ivec2(0), lp);
-        float pidI = floor(texelFetch(uP, sp, 0).b * 255.0 + 0.5);
-        vec4 s = pidI >= 40.0 ? vec4(uTypeColor[uPartType[int(pidI) - 40]], 1.0)
-               : pidI >= 20.0 ? vec4(0.45, 0.55, 0.75, 1.0) : vec4(0.0);
-        pc += vec4(s.rgb * s.a, s.a);
+        pc += texelFetch(uParts, sp, 0);   // (the parts layer, premultiplied)
       }
       pc /= float(taps);
       pc.rgb = pc.a > 0.0 ? pc.rgb / pc.a : vec3(0.0);
       pc.a *= 1.0 - uFrost * 0.2;                                   // frosted: a little more veiled too
       float pa = pc.a * uInsideA;
+      if (dot(uHiCol, vec3(1.0)) > 0.0 && distance(pc.rgb, uHiCol) < 0.06) pa = pc.a;   // (a node hovered: its part lit, not veiled)
       if (pa > 0.0) pm = vec4(pm.rgb * (1.0 - 0.7 * pa), pm.a * (1.0 - 0.7 * pa)) + vec4(pc.rgb * pa, pa) * (1.0 - pm.a * (1.0 - 0.7 * pa));
     }
     // outside: what sits on the skin — knob caps, speaker holes, the screen's face — crisp, on top
@@ -2932,10 +3076,10 @@ void drawMain(vec2 px) {
           float e1, e2, e3, e4;
           vec3 n = normalize(vec3(1, -1, -1) * extrasSDF(p + vec3(0.3, -0.3, -0.3), e1) + vec3(-1, -1, 1) * extrasSDF(p + vec3(-0.3, -0.3, 0.3), e2)
                            + vec3(-1, 1, -1) * extrasSDF(p + vec3(-0.3, 0.3, -0.3), e3) + vec3(1, 1, 1) * extrasSDF(p + vec3(0.3, 0.3, 0.3), e4));
-          vec3 c = vec3(0.34, 0.34, 0.36) * (0.62 + 0.55 * max(dot(n, L), 0.0) + 0.12 * max(n.y, 0.0));
+          vec3 c = mix(vec3(0.34, 0.34, 0.36), uDOut, uDOutTint) * (0.62 + 0.55 * max(dot(n, L), 0.0) + 0.12 * max(n.y, 0.0));   // (or in the chosen colour)
           oc4 = vec4(c + vec3(0.1) * pow(max(dot(reflect(-L, n), -rd), 0.0), 12.0), 1.0);
         } else if (speakerHoles(p) < 0.4) {
-          oc4 = vec4(0.36, 0.35, 0.37, 0.85);   // a speaker hole
+          oc4 = vec4(mix(vec3(0.36, 0.35, 0.37), uDOut * 0.9, uDOutTint), 0.85);   // a speaker hole
         } else {
           // the screen: found from the parts' boxes alone (no part models here: they cost the compiler a lot)
           int idx = -1;
@@ -2952,12 +3096,13 @@ void drawMain(vec2 px) {
               vec2 cell = clamp(floor((q.xy + vec2(19.5, 13.5)) / 3.0), vec2(0.0), vec2(12.0, 8.0));
               vec2 cc = q.xy - (cell * 3.0 - vec2(18.0, 12.0));
               bool led = max(abs(cc.x), abs(cc.y)) < 1.15;
-              oc4 = vec4(led ? (litLED(vec2(cell.x, 8.0 - cell.y)) > 0.5 ? vec3(0.96) : vec3(0.3, 0.3, 0.32)) : vec3(0.2, 0.2, 0.21), 1.0);
+              vec3 lit = mix(vec3(0.96), mix(uDOut, vec3(1.0), 0.7), uDOutTint), unlit = mix(vec3(0.3, 0.3, 0.32), uDOut * 0.75, uDOutTint), field = mix(vec3(0.2, 0.2, 0.21), uDOut * 0.55, uDOutTint);
+              oc4 = vec4(led ? (litLED(vec2(cell.x, 8.0 - cell.y)) > 0.5 ? lit : unlit) : field, 1.0);
             } else if (uPartType[idx] == 11 && abs(q.x) < 17.25 && abs(q.y + 3.0) < 11.5) {
               vec2 a = q.xy - vec2(0.0, -3.0);
               float eyes = max(abs(abs(a.x) - 6.0) - 1.6, abs(a.y - 2.5) - 2.2);
               float smile = max(abs(length(a - vec2(0.0, 3.0)) - 7.5) - 0.7, a.y + 1.5);
-              oc4 = vec4(min(eyes, smile) < 0.0 ? vec3(0.96) : vec3(0.27, 0.27, 0.29), 1.0);
+              oc4 = vec4(min(eyes, smile) < 0.0 ? mix(vec3(0.96), mix(uDOut, vec3(1.0), 0.7), uDOutTint) : mix(vec3(0.27, 0.27, 0.29), uDOut * 0.6, uDOutTint), 1.0);
             }
           }
         }
@@ -2969,6 +3114,111 @@ void drawMain(vec2 px) {
   outColor = pm * uAlpha;
 }
 `;
+
+
+/**
+ * densPartsShader — density's parts layer, in one of cross's looks (drawn only when the scene or the look
+ * changes). Its own small program, so density itself stays light: the REAL variant (real / grey: the parts
+ * marched and lit, every part's model inlined) is compiled only when one of those looks is picked.
+ */
+export const densPartsShader = levelCommon + /* glsl */ `
+uniform sampler2D uP;        // the flat g-buffer: which part is seen where
+uniform float uLineW;
+uniform float uCellPx;
+uniform int   uPartLook;     // 0 real · 1 grey · 2 flat · 3 colour · 4 outline · 5 tiles
+uniform vec3  uTypeColor[13];
+uniform vec3  uHiCol;        // the hovered node's colour, 0 = none
+uniform vec3  uPLineCol;     // outline look: the line's colour …
+uniform float uPLineByPart;  // … or each part in its own (1)
+uniform float uPLineA;       // … and its opacity
+#ifdef REAL
+vec4 realPart(vec3 ro, vec3 rd, float t, float tEnd, out float dist) {
+  int idx = 0;
+  dist = 1e9;
+  for (int i = 0; i < 110 + uZero; i++) {
+    vec3 p = ro + rd * t;
+    float e = partsSDF(p, idx);
+    vec2 cb = cablesSDF(p);
+    bool isCable = cb.x < e;
+    float m = min(e, cb.x);
+    if (m < 0.05) {
+      vec3 n = vec3(0.0);
+      for (int j = 0; j < 4 + uZero; j++) {
+        vec3 k = 0.5773 * (2.0 * vec3(float(((j + 3) >> 1) & 1), float((j >> 1) & 1), float(j & 1)) - 1.0);
+        n += k * (isCable ? cablesSDF(p + k * 0.3).x : partModel(idx, p + k * 0.3).x);
+      }
+      n = normalize(n);
+      float mat = isCable ? -1.0 : partModel(idx, p).y;
+      vec3 base = isCable ? cableColor(cb.y) : matColor(mat);
+      vec3 L = normalize(uLight);
+      vec3 shaded = base * (0.6 + 0.55 * max(dot(n, L), 0.0) + 0.12 * max(n.y, 0.0));
+      shaded = mix(shaded, vec3(1.0), 0.08);
+      if (mat == M_METAL || mat == M_RIM || mat == M_GOLD)
+        shaded += vec3(0.45) * pow(max(dot(reflect(-L, n), -rd), 0.0), 20.0);
+      if (mat == M_LED_LIT) shaded = base * 1.15;
+      if (!isCable && idx == uHi) shaded = mix(shaded, vec3(0.95, 0.3, 0.2), 0.45);
+      dist = t;
+      return vec4(min(shaded, vec3(1.0)), 1.0);
+    }
+    t += max(m, 0.05);
+    if (t > tEnd) break;
+  }
+  return vec4(0.0);
+}
+#endif
+/**
+ * Pass 2: the parts as they will be seen inside the shape, in one of cross's looks. Which part is seen
+ * where comes from the flat g-buffer (uP); real / grey march the part itself for its lit colour.
+ */
+vec4 partsLayer(vec2 px) {
+  ivec2 ip = ivec2(px), lp = textureSize(uP, 0) - 1;
+  float pid = floor(texelFetch(uP, ip, 0).b * 255.0 + 0.5);
+  if (uPartLook == 4) {
+    // outline: a line where one part meets another (or the background), as thick as asked (uLineW,
+    // looked for on two rings so a thick line stays whole), in its colour or each part's own
+    for (int k = 0; k < 16; k++) {
+      float an = float(k) * 0.7853982, rr = k < 8 ? uLineW : 0.5 * uLineW;
+      float npid = floor(texelFetch(uP, clamp(ip + ivec2(round(vec2(cos(an), sin(an)) * rr)), ivec2(0), lp), 0).b * 255.0 + 0.5);
+      if (npid != pid && max(npid, pid) >= 40.0) {
+        int w = int(max(npid, pid)) - 40;
+        vec3 ink = uPLineByPart > 0.5 ? uTypeColor[uPartType[w]] * 0.85 : uPLineCol;
+        if (w == uHi && dot(uHiCol, vec3(1.0)) > 0.0) return vec4(uHiCol, 1.0);   // (a node hovered: its part, whole)
+        return vec4(ink * uPLineA, uPLineA);   // (premultiplied)
+      }
+    }
+    return vec4(0.0);
+  }
+  if (uPartLook == 5) {
+    // tiles: the part seen at each cell's centre, as a small square (like the cross page's cells)
+    float cs = max(4.0, uCellPx * 2.0);
+    vec2 cc = (floor(px / cs) + 0.5) * cs;
+    if (max(abs(px.x - cc.x), abs(px.y - cc.y)) > cs * 0.36) return vec4(0.0);
+    pid = floor(texelFetch(uP, clamp(ivec2(cc), ivec2(0), lp), 0).b * 255.0 + 0.5);
+  }
+  if (pid < 20.0) return vec4(0.0);
+  if (pid < 40.0) return vec4(0.45, 0.55, 0.75, 1.0);       // cables
+  int i = int(pid) - 40;
+  vec3 c = uTypeColor[uPartType[i]];
+#ifdef REAL
+  if (uPartLook <= 1) {
+    vec2 o = (px - uCenterDev) / uFocal;
+    vec3 rd = normalize(uCamFwd + uCamRight * o.x + uCamUp * o.y), ro = uCamPos, oc = ro - uBoundC;
+    float bb = dot(oc, rd), disc = bb * bb - (dot(oc, oc) - uBoundR * uBoundR);
+    if (disc > 0.0) {
+      float sq = sqrt(disc), dist;
+      vec4 r = realPart(ro, rd, max(0.0, -bb - sq), -bb + sq, dist);
+      if (r.a > 0.0) c = r.rgb;
+    }
+    if (uPartLook == 1) c = vec3(dot(c, vec3(0.3, 0.59, 0.11))) * vec3(1.0, 0.985, 0.96) * 0.9 + 0.08;   // grey, a warm one
+  }
+#endif
+  if (i == uHi && dot(uHiCol, vec3(1.0)) > 0.0) c = uHiCol;   // a node's colour on hover
+  return vec4(c, 1.0);
+}
+
+void main() { outColor = partsLayer(gl_FragCoord.xy); }
+`;
+export const densPartsRealShader = densPartsShader.replace('#version 300 es', '#version 300 es\n#define REAL 1');
 
 /**
  * particlesShader (device res) — the "particles" view (ref: a framed dot grid on black).

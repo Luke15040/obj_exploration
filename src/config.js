@@ -123,7 +123,9 @@ export const CONFIG = {
   },
 
   /** flat hd: length of the hand-drawn redraw after a view change (s) */
-  flatHd: { redraw: 1.6 },
+  flatHd: { redraw: 1.6, redraw2: 1.25 },
+  /** flat hd 2: the drawing's colour (the outline and everything outside), to choose from */
+  flatLineCols: { orange: '#ff8f59', grey: '#8c867c', aqua: '#5fb5b0', olive: '#7f8a62', ink: '#3a3c30', white: '#ffffff' },   // s: the drawing growing back (flat hd · flat hd 2: quicker)
 
   /** sketch view: cell size of the stepped pencil line (mm) */
   sketch: { cellMm: 5 },
@@ -285,6 +287,40 @@ export const NODE_PALETTE = {
     piZero: '#a6aa7c', feather: '#a6aa7c', respeaker: '#6f7350', qtHub: '#5c6045', servoAdapter: '#7c8058',   // the rest: olives
     encoder: '#c6a3e0', buck: '#7cc6c6',                   // knobs: lilac (their own, not the speaker's yellow) · a deeper cyan
   },
+};
+
+/**
+ * The cross page's colours (flat hd 2 and density): taupe · orange · aqua · olive (the nodes' tabs),
+ * with their tints and shades. The other views keep CONFIG.palette.
+ */
+export const CROSS_PALETTE = {
+  // flat hd 2: ink, contours (skin · wheels · knob caps · orange marks)
+  flat: { ink: '#3a3c30', red: '#ff8f59', blue: '#5fb5b0', green: '#8a956e', orange: '#ff8f59' },
+  // one colour per kind of part (flat hd 2, and the parts inside density)
+  parts: {
+    matrix: '#ff8f59', oled: '#ffb08a',                    // screen · orange
+    speaker: '#b2ada3', speakerSmall: '#b2ada3',           // speaker · taupe
+    battery: '#9ddfdc', pdTrigger: '#74c6c2',              // energy · aqua
+    servo: '#8a956e',                                      // wheels · olive
+    piZero: '#a7af8e', feather: '#c4c9b0', respeaker: '#6c7556', qtHub: '#585f46', servoAdapter: '#7a8460',   // the rest: olives
+    encoder: '#8f8a80', buck: '#c4ebe9',                   // knobs: deep taupe · pale aqua
+  },
+  // flat hd 2: the parts in one scale (grey, or one of the colours), each kind its own step of it;
+  // they light up in the node's colour on hover. 'colour' = the parts above.
+  tones: {
+    grey: ['#f4f4f3', '#e3e3e1', '#cdcdca', '#b4b4b0', '#9a9a96', '#7d7d7a', '#61615e', '#454543'],
+  },
+  shade: {   // which step of the scale (1 light … 7 deep)
+    matrix: 3, oled: 2, speaker: 5, speakerSmall: 5, battery: 4, pdTrigger: 3, servo: 6,
+    piZero: 2, feather: 1, respeaker: 5, qtHub: 7, servoAdapter: 4, encoder: 6, buck: 1,
+  },
+  // density: one ramp each (page tint, then bands outside → in)
+  density: [
+      ['#ffefe8', '#ffdbca', '#ffc3a5', '#ffa87e', '#ff8f59', '#c77349', '#9a5c3d', '#6d4630'],   // orange
+      ['#f1fbfa', '#e0f5f4', '#caeeec', '#b3e6e4', '#9ddfdc', '#7eafac', '#648885', '#4b625e'],   // aqua
+      ['#eff0eb', '#daddd1', '#c0c6b1', '#a4ac8e', '#8a956e', '#6f7759', '#5a5f48', '#444837'],   // olive
+      ['#f4f3f0', '#ecebe7', '#e3e1dc', '#dad8d3', '#cbc9c4', '#b1aea8', '#a29f99', '#8d8a84'],   // beige: cross's warm greys (look a), light
+  ],
 };
 
 /** Displays from the library the screen node can pick from (sizes in mm, display = lit area). */

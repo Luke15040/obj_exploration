@@ -1,24 +1,25 @@
-import { view } from './view.js?v=202610080154';
-import { state, setWheelSpread } from './state.js?v=202610080154';
-import { createOrbit } from './orbit.js?v=202610080154';
-import { createBody } from './body/body.js?v=202610080154';
-import { createComponents } from './components/components.js?v=202610080154';
-import { attachDrag } from './components/drag.js?v=202610080154';
-import { createExtras } from './components/extras.js?v=202610080154';
-import { createDebugPanel } from './debug/panel.js?v=202610080154';
-import { createPrompts } from './prompts.js?v=202610080154';
-import { createNodes } from './ui/nodes.js?v=202610080154';
-import { createBom } from './ui/bom.js?v=202610080154';
-import { createPartLabels } from './ui/labels.js?v=202610080154';
-import { createDiagram } from './ui/diagram.js?v=202610080154';
-import { createViewToggle } from './debug/viewtoggle.js?v=202610080154';
-import { createViewPad } from './ui/viewpad.js?v=202610080154';
-import { createFrame } from './ui/frame.js?v=202610080154';
-import { createGridPanel } from './ui/gridpanel.js?v=202610080154';
-import { createStretchPad } from './ui/stretchpad.js?v=202610080154';
-import { createSnapPad } from './ui/snappad.js?v=202610080154';
-import { createWheelPad } from './ui/wheelpad.js?v=202610080154';
-import { createDims } from './ui/dims.js?v=202610080154';
+import { view } from './view.js?v=202610081559';
+import { state, setWheelSpread } from './state.js?v=202610081559';
+import { createOrbit } from './orbit.js?v=202610081559';
+import { createBody } from './body/body.js?v=202610081559';
+import { createComponents } from './components/components.js?v=202610081559';
+import { attachDrag } from './components/drag.js?v=202610081559';
+import { createExtras } from './components/extras.js?v=202610081559';
+import { createDebugPanel } from './debug/panel.js?v=202610081559';
+import { createPrompts } from './prompts.js?v=202610081559';
+import { createNodes } from './ui/nodes.js?v=202610081559';
+import { createBom } from './ui/bom.js?v=202610081559';
+import { createPartLabels } from './ui/labels.js?v=202610081559';
+import { createDiagram } from './ui/diagram.js?v=202610081559';
+import { createViewToggle } from './debug/viewtoggle.js?v=202610081559';
+import { createViewPad } from './ui/viewpad.js?v=202610081559';
+import { createFrame } from './ui/frame.js?v=202610081559';
+import { createGridPanel } from './ui/gridpanel.js?v=202610081559';
+import { createStretchPad } from './ui/stretchpad.js?v=202610081559';
+// (the angle snap is a modifier on the cross page: viewtoggle.js)
+// import { createSnapPad } from './ui/snappad.js?v=202610081559';
+import { createWheelPad } from './ui/wheelpad.js?v=202610081559';
+import { createDims } from './ui/dims.js?v=202610081559';
 
 const canvas = document.getElementById('body-layer');
 // if the GPU resets (driver timeout), come back with a fresh page once it is available again
@@ -42,7 +43,7 @@ nodes.onApply = (id) => prompts.applyReference(id);
 createViewToggle({ orbit });
 createFrame({ body });
 createGridPanel();
-nodes.addTool('views', createViewPad({ orbit }), {
+if (document.body.dataset.page !== 'cross') nodes.addTool('views', createViewPad({ orbit }), {
   name: 'views',
   icon: '<svg viewBox="0 0 24 24"><path d="M12 3.5 19.5 7.8v8.4L12 20.5 4.5 16.2V7.8Z M4.5 7.8 12 12.1 19.5 7.8 M12 12.1v8.4"/></svg>',
 });
@@ -50,7 +51,7 @@ nodes.addTool('views', createViewPad({ orbit }), {
 // the cross page: a stretch node (the skin wider / taller); the add-ons follow to their spots
 if (document.body.dataset.page === 'cross') {
   let pending = 0;
-  nodes.addTool('stretch', createStretchPad({
+  if (false) nodes.addTool('stretch', createStretchPad({   // (the cross page: no stretch node)
     onChange: () => { cancelAnimationFrame(pending); pending = requestAnimationFrame(() => prompts.placeAll()); },
   }), {
     name: 'stretch',
@@ -61,18 +62,23 @@ if (document.body.dataset.page === 'cross') {
     icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/></svg>',
     when: () => state.kind === 'robot' || (state.kind === 'speaker' && state.moves),   // whatever moves
   });
-  nodes.addTool('snap', createSnapPad(), {
-    name: 'angle snap',
-    icon: '<svg viewBox="0 0 24 24"><path d="M14 19.5V4.5M14 19.5 4.5 17.6M14 19.5l-8.4 4"/></svg>',
-  });
 }
 
 const dims = document.body.dataset.page === 'cross' ? createDims({ body }) : null;
 
+// the cross page: the tool nodes are modifiers too, in the left column under view and angle snap
+if (document.body.dataset.page === 'cross') {
+  const lm = document.getElementById('leftmods');
+  for (const sel of ['.node.shp', '.node.spk', '.node.scr', '.node.eng', '.node.whl']) {
+    const n = document.querySelector(sel);
+    if (lm && n) lm.appendChild(n);
+  }
+}
+
 // the cross page opens on the front view, the nodes where they belong, and a loading veil until it has all played
 if (document.body.dataset.page === 'cross') {
   orbit.setView('front');
-  nodes.setHomes({ stretch: [0.091, 0.11], views: [0.203, 0.11], speaker: [0.6625, 0.125], shape: [0.1875, 0.69], snap: [0.68, 0.556] });
+  nodes.setHomes({ stretch: [0.091, 0.11], speaker: [0.6625, 0.125], shape: [0.1875, 0.69] });   // (views and angle snap are modifiers here, not nodes)
   const veil = document.getElementById('loading');
   let firstAt = 0, frames = 0;
   const watch = (now) => {

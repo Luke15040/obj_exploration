@@ -1,4 +1,4 @@
-import { CONFIG } from './config.js?v=202610080154';
+import { CONFIG } from './config.js?v=202610081559';
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -58,7 +58,7 @@ export const view = {
     this.scale = CONFIG.pxPerMm * Math.min(hi, Math.max(lo, fit)) * this.zoom;
 
     this.cx = this.vw / 2;
-    this.cy = top + availH / 2;
+    this.cy = top + availH / 2 + (document.body.dataset.page === 'cross' ? Math.round(this.vh * 0.015) : 0);   // (cross page: a touch lower, clear of the prompt)
   },
 
   /** Orbit the camera (radians) around the target. */

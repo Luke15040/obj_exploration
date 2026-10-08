@@ -1,9 +1,9 @@
-import { CONFIG } from './config.js?v=202610080154';
-import { state, params, setPose, getPose, setShape, setKind, setShape2, updateExtra, setWithScreen, setMoves, setScreenType, setScreenSpot } from './state.js?v=202610080154';
-import { SHAPES, TOTEM_POOL, TOTEM_BASE, FREE_SLOTS, freeKnobSpots } from './parts.js?v=202610080154';
-import { frontPoint, shapeSpots, stretchPoint, snapRay } from './body/sdf.js?v=202610080154';
-import { view } from './view.js?v=202610080154';
-import { createBlockPrompt } from './ui/blocks.js?v=202610080154';
+import { CONFIG } from './config.js?v=202610081559';
+import { state, params, setPose, getPose, setShape, setKind, setShape2, updateExtra, setWithScreen, setMoves, setScreenType, setScreenSpot } from './state.js?v=202610081559';
+import { SHAPES, TOTEM_POOL, TOTEM_BASE, FREE_SLOTS, freeKnobSpots } from './parts.js?v=202610081559';
+import { frontPoint, shapeSpots, stretchPoint, snapRay } from './body/sdf.js?v=202610081559';
+import { view } from './view.js?v=202610081559';
+import { createBlockPrompt } from './ui/blocks.js?v=202610081559';
 
 /**
  * Guided prompts: a few canned "prompts" that reshape the object, standing in
@@ -500,7 +500,19 @@ export function createPrompts({ extras, body, nodes }) {
 
   // the page opens on case 2 · speaker (the cross page: "a thing that lets me control volume")
   setCase('speaker');
-  if (blocks) schedule(1500, () => blocks.attachById('volume'));
+  // the cross page opens on the hexagon and the whole sentence: 'has a face' in line (the main feature),
+  // 'lets me control bass' above, 'lets me control volume' below (each joins once the last has played)
+  if (blocks) {
+    setForm('hexagon');
+    const queue = ['face', 'volume', 'bass'];   // (the first is the main one; the others alternate below / above)
+    const next = () => {
+      if (!queue.length) return;
+      if (busy) { schedule(150, next); return; }
+      blocks.attachById(queue.shift());
+      schedule(150, next);
+    };
+    schedule(1500, next);
+  }
 
   return { update, run, applyReference, setCase, placeAll };
 }

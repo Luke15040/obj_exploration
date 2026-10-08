@@ -1,5 +1,5 @@
-import { CONFIG } from '../config.js?v=202610080154';
-import { params } from '../state.js?v=202610080154';
+import { CONFIG } from '../config.js?v=202610081559';
+import { params } from '../state.js?v=202610081559';
 
 /**
  * The block prompt (cross page), drawn in the language of the pixel shape: every prompt is
@@ -19,6 +19,11 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid, 
   canvas.id = 'promptcells';
   document.body.appendChild(canvas);
   const ctx = canvas.getContext('2d');
+  // the cross page: the sentence as a plain line of text at the bottom (the blocks are not shown, not editable)
+  const LOCKED = document.body.dataset.page === 'cross';
+  const line0 = document.createElement('div');
+  line0.id = 'promptline';
+  if (LOCKED) document.body.appendChild(line0);
   const again = document.createElement('button');
   again.id = 'blockagain';
   again.textContent = 'start over';
@@ -33,6 +38,7 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid, 
   let focus = null;           // the important prompt: in line with 'a thing that' (the last attached, or the last clicked)
   let line = null;            // the piece drawn in line right now (the focus, unless one is being dropped there)
   let pending = null;         // pointer down on a piece, not moved yet (a click, or the start of a drag)
+  let hovered = null;         // the prompt in the sentence under the pointer (its × shows clearly)
   const head = { text: 'a thing that', place: 'head', key: '', t0: 0 };   // the root: never moves, never leaves
   let G = { cell: 20, ox: 0, oyTop: 0 };
 
@@ -49,7 +55,7 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid, 
   function sizeOf(piece) {
     const pad = Math.max(8, G.cell * 0.5);
     const g = piece.p?.glyph ? 1 : 0;      // the glyph takes the first cell
-    piece.w = g + Math.max(2, Math.ceil((measure(piece.text) + 2 * pad) / G.cell));
+    piece.w = g + Math.max(2, Math.ceil((measure(piece.text) + 2 * pad) / G.cell)) + (piece.place === 'stack' ? 1 : 0);   // (+ the ×: it can be taken out)
     piece.h = Math.max(1, Math.ceil(24 / G.cell));
   }
 
@@ -92,8 +98,9 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid, 
       if (tray.includes(pc)) place(pc, col, trow - pc.h + 1, 'tray');
       col += pc.w + 1;
     }
-    again.style.left = `${Math.round(cellX(col) + 4)}px`;
-    again.style.top = `${Math.round(cellY(trow) + G.cell / 2 - 11)}px`;
+    const al = `${Math.round(cellX(col) + 4)}px`, at = `${Math.round(cellY(trow) + G.cell / 2 - 11)}px`;
+    if (again.style.left !== al) again.style.left = al;   // (only when it moved: a write makes the page lay out again)
+    if (again.style.top !== at) again.style.top = at;
   }
   const slots = [];            // { kind: 'main' | 'rest', col, row, w, h, free }
   function place(pc, col, row, where) {
@@ -187,6 +194,18 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid, 
     ctx.globalAlpha = 1;
   }
 
+  /** The × at the end of a prompt in the sentence: it can be taken out (back to the tray). */
+  function drawCross(pc, col, row) {
+    const c = G.cell, x = cellX(col + pc.w - 1) + c / 2, y = cellY(row) + (pc.h * c) / 2, r = Math.max(2.5, c * 0.16);
+    ctx.globalAlpha = (pc === hovered ? 0.85 : 0.3) * (busy ? 0.5 : 1);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x - r, y - r); ctx.lineTo(x + r, y + r); ctx.moveTo(x + r, y - r); ctx.lineTo(x - r, y + r);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
   /** One small black sign per prompt, in its first cell: a single simple geometric shape. */
   function drawGlyph(kind, x, y) {
     const c = G.cell, r = c * 0.24;
@@ -214,9 +233,17 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid, 
     return ctx.createPattern(t, 'repeat');
   })();
 
+  // the last picture drawn: while nothing moves, builds or changes, the canvas is left as it is
+  let drawnSig = null;
   function draw() {
     const dpr = window.devicePixelRatio || 1;
     const W = Math.round(window.innerWidth * dpr), H = Math.round(window.innerHeight * dpr);
+    const animating = !!drag || [head, ...pieces].some((pc) => !settled(pc) || clock - pc.t0 < BUILD + 1);
+    const sig = [W, H, G.cell, G.ox, G.oyTop, params.look, params.snapStyle, busy, line?.key ?? '', head.key, head.text, hovered?.key ?? '',
+      ...pieces.map((pc) => pc.key + pc.place + pc.text + (stack.includes(pc) ? '*' : '')),
+      ...slots.map((sl) => `${sl.kind}${sl.col},${sl.row},${sl.w},${sl.h}${sl.free}`)].join('|');
+    if (!animating && sig === drawnSig) return;
+    drawnSig = animating ? null : sig;   // (after an animation: one more, still frame)
     if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
@@ -249,7 +276,7 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid, 
     drawBlob(sc, (q) => toneOf.get(`${q.c},${q.r}`), dpr, alpha);
     drawMarks(sc, (q) => (toneOf.get(`${q.c},${q.r}`) === ROOT ? ROOT_MARK : X.dot), dpr, skip);
     if (settled(head)) drawText(head, head.col, head.row, false, ROOT_INK);
-    stack.filter(settled).forEach((pc) => drawText(pc, pc.col, pc.row));
+    stack.filter(settled).forEach((pc) => { drawText(pc, pc.col, pc.row); drawCross(pc, pc.col, pc.row); });
     for (const pc of moving) {
       ctx.save();
       ctx.translate((pc.px - pc.col) * G.cell, (pc.py - pc.row) * G.cell);
@@ -290,12 +317,23 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid, 
     return [...pieces].reverse().find((pc) => c >= pc.col && c < pc.col + pc.w && r >= pc.row && r < pc.row + pc.h);
   };
   window.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0 || busy) return;
+    if (LOCKED || e.button !== 0 || busy) return;
     const pc = hit(e.clientX, e.clientY);
     if (!pc) return;
     e.preventDefault();
     e.stopPropagation();            // not an orbit, not a part drag
     const [c, r] = cellAt(e.clientX, e.clientY);
+    // on its ×: out of the sentence, back to the tray (as when dragged out)
+    if (stack.includes(pc) && c === pc.col + pc.w - 1) {
+      const was = focus;
+      stack.splice(stack.indexOf(pc), 1);
+      pc.place = 'tray';
+      if (focus === pc) focus = stack[0] ?? null;
+      hovered = null;
+      onChange(stack.map((q) => q.p));
+      if (focus !== was) onFocus(focus?.p ?? null);
+      return;
+    }
     pending = { piece: pc, x: e.clientX, y: e.clientY, gc: c - pc.col, gr: r - pc.row };
   }, true);
   window.addEventListener('pointermove', (e) => {
@@ -308,7 +346,9 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid, 
       document.documentElement.classList.add('block-dragging');
     }
     if (!drag) {
-      document.documentElement.classList.toggle('block-hover', !busy && !!hit(e.clientX, e.clientY));
+      const h = hit(e.clientX, e.clientY);
+      document.documentElement.classList.toggle('block-hover', !busy && !!h);
+      hovered = h && stack.includes(h) ? h : null;
       return;
     }
     const [c, r] = cellAt(e.clientX, e.clientY);
@@ -399,6 +439,19 @@ export function createBlockPrompt({ presets, onAttach, onChange, onReset, grid, 
       for (const pc of pieces) sizeOf(pc);
       layout();
       glide(dt);
+      if (LOCKED) {
+        // the sentence, each block in its own colour: the root, the others, and the main feature last
+        // ('a speaking thing that lets me control volume, lets me control bass and has a face')
+        const main = stack.includes(focus) ? focus : null;
+        const rest = stack.filter((pc) => pc !== main).map((pc) => pc.text);
+        const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+        const parts = rest.map((t) => `<span class="pl-rest">${esc(t)}</span>`);
+        const tail = main ? `<span class="pl-main">${esc(main.text)}</span>` : '';
+        const body2 = parts.length && tail ? parts.join('<i>, </i>') + '<i> and </i>' + tail : parts.length ? parts.join('<i>, </i>') : tail || '<i>…</i>';
+        const html = `<span class="pl-root">${esc(head.text)}</span> ` + body2;
+        if (line0.dataset.html !== html) { line0.dataset.html = html; line0.innerHTML = html; }
+        return;
+      }
       draw();
     },
   };

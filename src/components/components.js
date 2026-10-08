@@ -1,20 +1,25 @@
-import { CONFIG } from '../config.js?v=202610080154';
-import { state } from '../state.js?v=202610080154';
-import { currentLayout } from '../body/sdf.js?v=202610080154';
-import { screenSlotFor } from '../parts.js?v=202610080154';
-import { view } from '../view.js?v=202610080154';
-import { pathOf, segsOf, hull, cylinderLines, circle3, boxLines } from './wire.js?v=202610080154';
+import { CONFIG } from '../config.js?v=202610081559';
+import { state } from '../state.js?v=202610081559';
+import { currentLayout } from '../body/sdf.js?v=202610081559';
+import { screenSlotFor } from '../parts.js?v=202610081559';
+import { view } from '../view.js?v=202610081559';
+import { pathOf, segsOf, hull, cylinderLines, circle3, boxLines } from './wire.js?v=202610081559';
+
+/** DOM writes only when the value changed: a write, even of the same value, can make the page lay out again. */
+const setA = (el, k, v) => { v = String(v); if (el.getAttribute(k) !== v) el.setAttribute(k, v); };
+const setText = (el, v) => { if (el.textContent !== v) el.textContent = v; };
+const setStyle = (el, k, v) => { v = String(v); if (el.style[k] !== v) el.style[k] = v; };
 
 const NS = 'http://www.w3.org/2000/svg';
 
 function el(tag, attrs = {}, parent) {
   const node = document.createElementNS(NS, tag);
-  for (const k in attrs) node.setAttribute(k, attrs[k]);
+  for (const k in attrs) setA(node, k, attrs[k]);
   if (parent) parent.appendChild(node);
   return node;
 }
 
-const setAttrs = (node, attrs) => { for (const k in attrs) node.setAttribute(k, attrs[k]); };
+const setAttrs = (node, attrs) => { for (const k in attrs) setA(node, k, attrs[k]); };
 const line = (node, x1, y1, x2, y2) => setAttrs(node, { x1, y1, x2, y2 });
 const fmt = (v) => (Math.abs(v) < 0.05 ? '0.0' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1));
 /* ---------- geometry → projected line sets ---------- */
@@ -67,21 +72,21 @@ export function createComponents(svg) {
 
   /** Hit area, halo, ticks, crosshair and labels from the projected points. */
   function annotate(part, pts, center, dx, dy) {
-    part.hit.setAttribute('d', pathOf(hull(pts), true));
+    setA(part.hit, 'd', pathOf(hull(pts), true));
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
     part.box = { x0, y0, x1, y1 };
 
     const o = 7, t = 5;
     setAttrs(part.halo, { x: x0 - o, y: y0 - o, width: x1 - x0 + 2 * o, height: y1 - y0 + 2 * o, rx: 3 });
-    part.tickTR.setAttribute('d', `M${x1 + o - t} ${y0 - o} H${x1 + o} V${y0 - o + t}`);
-    part.tickBL.setAttribute('d', `M${x0 - o} ${y1 + o - t} V${y1 + o} H${x0 - o + t}`);
+    setA(part.tickTR, 'd', `M${x1 + o - t} ${y0 - o} H${x1 + o} V${y0 - o + t}`);
+    setA(part.tickBL, 'd', `M${x0 - o} ${y1 + o - t} V${y1 + o} H${x0 - o + t}`);
     line(part.crossH, center[0] - 5, center[1], center[0] + 5, center[1]);
     line(part.crossV, center[0], center[1] - 5, center[0], center[1] + 5);
     setAttrs(part.labelY, { x: x0 - o, y: y0 - o - 6 });
     setAttrs(part.labelX, { x: x1 + o, y: y1 + o + 13 });
-    part.labelY.textContent = `y ${fmt(dy)}`;
-    part.labelX.textContent = `x ${fmt(dx)}`;
+    setText(part.labelY, `y ${fmt(dy)}`);
+    setText(part.labelX, `x ${fmt(dx)}`);
   }
 
   let active = null;
@@ -91,12 +96,12 @@ export function createComponents(svg) {
 
     for (const side of ['left', 'right']) {
       const part = parts[`wheel-${side}`];
-      part.g.style.display = state.kind === 'speaker' ? 'none' : '';
+      setStyle(part.g, 'display', state.kind === 'speaker' ? 'none' : '');
       const pos = state.wheels[side];
       const L = wheelLines([pos.x, pos.y, 0], W.h / 2, W.w / 2);
-      part.main.setAttribute('d', L.caps.filter((k) => k.visible).map((k) => pathOf(k.pts, true)).join(' ') + ' ' + segsOf(L.sil));
-      part.hidden.setAttribute('d', L.caps.filter((k) => !k.visible).map((k) => pathOf(k.pts, true)).join(' '));
-      part.soft.setAttribute('d', L.hubs.map((h) => pathOf(h, true)).join(' '));
+      setA(part.main, 'd', L.caps.filter((k) => k.visible).map((k) => pathOf(k.pts, true)).join(' ') + ' ' + segsOf(L.sil));
+      setA(part.hidden, 'd', L.caps.filter((k) => !k.visible).map((k) => pathOf(k.pts, true)).join(' '));
+      setA(part.soft, 'd', L.hubs.map((h) => pathOf(h, true)).join(' '));
       const homeX = side === 'left' ? -I.wheelHalfTrack : I.wheelHalfTrack;
       annotate(part, L.pts, L.center, pos.x - homeX, pos.y - I.wheelY);
     }
@@ -104,7 +109,7 @@ export function createComponents(svg) {
     const sp = parts.screen;
     // case 2: the screen can be grabbed too (it snaps between its spots around the speaker)
     const grab2 = state.kind === 'speaker' && state.withScreen && state.shape !== 'totem';
-    sp.g.style.display = (state.kind === 'speaker' && !grab2) || (state.kind === 'robot' && !state.withScreen) ? 'none' : '';
+    setStyle(sp.g, 'display', (state.kind === 'speaker' && !grab2) || (state.kind === 'robot' && !state.withScreen) ? 'none' : '');
     const mx = grab2 ? currentLayout().parts.find((p) => p.key === 'matrix') : null;
     if (mx) {
       // case 2: the real screen part (it can face any way): its turned box, projected
@@ -113,16 +118,16 @@ export function createComponents(svg) {
         const R = mx.R;
         return view.project(...[0, 1, 2].map((k) => mx.c[k] + R[k] * l[0] + R[3 + k] * l[1] + R[6 + k] * l[2]));
       });
-      sp.main.setAttribute('d', pathOf(hull(pts), true));
-      sp.hidden.setAttribute('d', '');
-      sp.soft.setAttribute('d', '');
+      setA(sp.main, 'd', pathOf(hull(pts), true));
+      setA(sp.hidden, 'd', '');
+      setA(sp.soft, 'd', '');
       annotate(sp, pts, view.project(...mx.c), 0, 0);
     } else {
       const sc = grab2 ? screenSlotFor(state.screenSpot, state.speakerLib, state.screenType) : [state.screen.x, state.screen.y, 0];
       const B = boxLines([sc[0], sc[1], 0], [S.w / 2, S.h / 2, S.d / 2], S.display);
-      sp.main.setAttribute('d', segsOf(B.shown));
-      sp.hidden.setAttribute('d', segsOf(B.hidden));
-      sp.soft.setAttribute('d', B.disp ? pathOf(B.disp, true) : '');
+      setA(sp.main, 'd', segsOf(B.shown));
+      setA(sp.hidden, 'd', segsOf(B.hidden));
+      setA(sp.soft, 'd', B.disp ? pathOf(B.disp, true) : '');
       annotate(sp, B.pts, B.center, grab2 ? 0 : state.screen.x - I.screenX, grab2 ? 0 : state.screen.y - I.screenY);
     }
 

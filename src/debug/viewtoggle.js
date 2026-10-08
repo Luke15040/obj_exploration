@@ -1,16 +1,20 @@
-import { CONFIG } from '../config.js?v=202610080154';
-import { params } from '../state.js?v=202610080154';
+import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610081559';
+import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610081559';
+import { params } from '../state.js?v=202610081559';
 
 // three pages: the main one, lab.html with every particle / dither experiment, cross.html with only the cross view
 const LAB = document.body.dataset.page === 'lab';
 const CROSS = document.body.dataset.page === 'cross';
 const MAIN_MODES = ['pixel3d', 'sketch', 'flathd', 'cross', 'marker', 'density', 'flat2', 'flathd2', 'glass', 'empty'];
 const LAB_MODES = ['dots', 'dotsgrid', 'pixel', 'pixel2', 'live', 'particles', 'orbital'];
-const MODES = LAB ? LAB_MODES : CROSS ? ['cross', 'flathd2', 'density', 'gradient'] : MAIN_MODES;
+const MODES = LAB ? LAB_MODES : CROSS ? ['cross', 'flathd2', 'density'] : MAIN_MODES;
 // the cross page's density starts as the soft ball: the outside on top, no outlines
 // (the defaults below are the look settled on: a pink soft ball, lit, the inside frosted behind it)
-if (CROSS) Object.assign(params, { unfinished: true, unfinishedSpeed: 0.08, flatAlive: 0.15, densGrain: 0.25, densEdge: 0.15, densStyle: 'soft', densOutside: 1, densInside: 0.62, densFrost: 0.2, densMotion: 0.65, densDiverge: 0.07, densSoft: 0.07, densPalette: 0, densGlow: 0.7, densLines: { object: false, parts: false } });
-const LABELS = { dots: 'dots', blocks: 'lines', flat: 'flat 2', flat2: 'flat 1', pixel: 'dither 1', pixel2: 'dither 2', pixel3d: 'pixel 3d', glass: 'glass', empty: 'empty', sketch: 'sketch', flathd: 'flat hd', flathd2: 'flat hd 2', milk: 'milk', live: 'live', cross: 'cross', cross2: 'cross 2', marker: 'marker', density: 'density', gradient: 'gradient', particles: 'particles', picasso: 'picasso', dotsgrid: 'dots grid', orbital: 'orbital', blob: 'blob' };
+if (CROSS) Object.assign(params, { unfinished: true, unfinishedSpeed: 0.05, flatAlive: 0.13, unfHand: 0.37, unfTwice: 0.5, unfGaps: 0.6, flatFrost: 0.04, flatInside: 0.21, flatOutside: 0.97, flatTone: 'taupe', flatLineW: 1.5, flatSkinFill: 0.05, flatLines: 'colour', flatParts: 'fill', densGrain: 0.38, densEdge: 0.48, densStyle: 'grainy', densOutside: 0.78, densInside: 1, densFrost: 0.19, densMotion: 0.95, densDiverge: 0.07, densSoft: 0.18, densPalette: 3, densGlow: 0.58, densPartStyle: 'outline', densShapeA: 0.76, densTrans: 'free', densLines: { object: false, parts: false },
+  densOutCol: 'grey', densPartLineW: 1.15, densPartLineA: 0.89, densPartLineCol: 'white' });   // (density: the user's screenshot, 2026-10-08)
+const LABELS0 = { dots: 'dots', blocks: 'lines', flat: 'flat 2', flat2: 'flat 1', pixel: 'dither 1', pixel2: 'dither 2', pixel3d: 'pixel 3d', glass: 'glass', empty: 'empty', sketch: 'sketch', flathd: 'flat hd', flathd2: 'flat hd 2', milk: 'milk', live: 'live', cross: 'cross', cross2: 'cross 2', marker: 'marker', density: 'density', gradient: 'gradient', particles: 'particles', picasso: 'picasso', dotsgrid: 'dots grid', orbital: 'orbital', blob: 'blob' };
+// the cross page names its three views: pegboard · napkin · density
+const LABELS = { ...LABELS0, ...(CROSS ? { cross: 'pegboard', flathd2: 'napkin', density: 'density' } : {}) };
 
 /**
  * "dots | lines | solid" switch (the `b` key cycles). The body layer
@@ -42,7 +46,7 @@ export function createViewToggle({ orbit } = {}) {
     if ((mode === 'flathd' || mode === 'flathd2' || mode === 'cross' || mode === 'marker' || mode === 'picasso') && current !== mode) params.redraw++;   // these views draw / build themselves in
     current = mode;
     // the cross page: flat hd 2 is shown in look b, cross in look a
-    if (CROSS && typeof markLook === 'function') { params.look = mode === 'flathd2' ? 2 : 1; markLook(); }
+    if (CROSS && typeof markLook === 'function') { params.look = 1; markLook(); }   // (flat hd 2 too: look a)
     // 'dots grid' = the dots view with the first, screen-space dithering
     params.dotStyle = mode === 'dotsgrid' ? 'grid' : 'cloud';
     params.view = mode === 'dotsgrid' ? 'dots' : mode;
@@ -54,9 +58,9 @@ export function createViewToggle({ orbit } = {}) {
     const ffOn = document.querySelector('#frostfollow [data-ff="1"]');
     if (ffOn) ffOn.textContent = mode === 'flathd2' ? 'follows the line' : 'follows the tiles';   // (what the frost goes with)
     const frIn = document.querySelector('#frost input');
-    if (frIn) frIn.value = mode === 'density' ? params.densFrost : params.frost;
+    if (frIn) frIn.value = mode === 'density' ? params.densFrost : mode === 'flathd2' ? params.flatFrost : params.frost;
     const frl = document.querySelectorAll('#frost .lbl');
-    if (frl.length === 2) { frl[0].textContent = mode === 'flathd2' ? 'sharp' : 'clear'; frl[1].textContent = mode === 'flathd2' ? 'blurred' : 'frosted'; }
+    if (frl.length === 2) { frl[0].textContent = mode === 'flathd2' ? 'parts blur' : 'clear'; frl[1].textContent = mode === 'flathd2' ? 'blurred' : 'frosted'; }
     const ffl = document.querySelector('#frostfollow .lbl');
     if (ffl) ffl.textContent = mode === 'flathd2' ? 'blur' : 'frost';
     document.body.classList.toggle('mode-pixel', mode === 'pixel' || mode === 'pixel2');
@@ -176,14 +180,14 @@ export function createViewToggle({ orbit } = {}) {
   // density: bands (a contour map) or a soft ball
   const dst = document.createElement('div');
   dst.id = 'densstyle';
-  dst.innerHTML = '<span class="lbl">density</span><button data-dst="soft">soft ball</button><button data-dst="bands">bands</button>';
+  dst.innerHTML = '<span class="lbl">density</span>' + (CROSS ? '<button data-dst="grainy">grainy</button>' : '') + '<button data-dst="soft">soft ball</button><button data-dst="bands">bands</button>';
   const markDst = () => dst.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.dst === params.densStyle));
   markDst();
   dst.addEventListener('click', (e) => {
     const b = e.target.closest('[data-dst]');
-    if (b) { params.densStyle = b.dataset.dst; markDst(); document.body.classList.toggle('dens-soft', params.densStyle === 'soft'); }
+    if (b) { params.densStyle = b.dataset.dst; markDst(); document.body.classList.toggle('dens-soft', params.densStyle !== 'bands'); }
   });
-  document.body.classList.toggle('dens-soft', params.densStyle === 'soft');
+  document.body.classList.toggle('dens-soft', params.densStyle !== 'bands');   // (grainy: the soft ball's sliders too)
   document.body.appendChild(dst);
 
   // density, soft ball: how soft and round it is
@@ -212,6 +216,17 @@ export function createViewToggle({ orbit } = {}) {
   dglR.value = params.densGlow;
   dglR.addEventListener('input', () => { params.densGlow = Number(dglR.value); });
   document.body.appendChild(dgl);
+
+  // pegboard (cross): how bright the body is — darker ↔ lighter (0.5 = as designed)
+  if (CROSS) {
+    const cb = document.createElement('div');
+    cb.id = 'crossbright';
+    cb.innerHTML = '<span class="lbl">darker</span><input type="range" min="0" max="1" step="0.01" aria-label="body brightness"><span class="lbl">lighter</span>';
+    const cbR = cb.querySelector('input');
+    cbR.value = params.crossBright ?? 0.5;
+    cbR.addEventListener('input', () => { params.crossBright = Number(cbR.value); });
+    document.body.appendChild(cb);
+  }
 
   // gradient: its sliders (grain · flow · wobble · round) and palettes (each with its page)
   const gradSlider = (id, key, lo, hi) => {
@@ -260,7 +275,7 @@ export function createViewToggle({ orbit } = {}) {
   // density (cross page): the transition while it turns
   const dtr = document.createElement('div');
   dtr.id = 'denstrans';
-  dtr.innerHTML = '<span class="lbl">transition</span><button data-dtr="condense">condense</button><button data-dtr="evaporate">evaporate</button><button data-dtr="liquid">liquid</button>';
+  dtr.innerHTML = '<span class="lbl">transition</span>' + (CROSS ? '<button data-dtr="free">free</button>' : '') + '<button data-dtr="condense">condense</button><button data-dtr="evaporate">evaporate</button><button data-dtr="liquid">liquid</button>';
   const markDtr = () => dtr.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.dtr === params.densTrans));
   markDtr();
   dtr.addEventListener('click', (e) => {
@@ -269,10 +284,62 @@ export function createViewToggle({ orbit } = {}) {
   });
   document.body.appendChild(dtr);
 
+  // density: the parts inside, drawn as in cross (same looks) · how solid the shape is
+  const dps = document.createElement('div');
+  dps.id = 'densparts';
+  const DLOOKS = { colour: 'real', grey: 'grey', flat: 'flat', vector: 'colour', outline: 'outline', flathd2: 'tiles' };
+  dps.innerHTML = '<span class="lbl">parts</span>' + Object.entries(DLOOKS).map(([k, t]) => `<button data-dps="${k}">${t}</button>`).join('');
+  const markDps = () => dps.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.dps === params.densPartStyle));
+  markDps();
+  dps.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-dps]');
+    if (b) { params.densPartStyle = b.dataset.dps; markDps(); markOutl?.(); }
+  });
+  document.body.appendChild(dps);
+  // density, parts as outline: the line's thickness and colour (shown with the outline look)
+  const dpw = document.createElement('div');
+  dpw.id = 'denspartlw';
+  dpw.className = 'densoutl';
+  dpw.innerHTML = '<span class="lbl">line thin</span><input type="range" min="0.6" max="4" step="0.05" aria-label="outline thickness"><span class="lbl">thick</span>';
+  const dpwR = dpw.querySelector('input');
+  dpwR.value = params.densPartLineW;
+  dpwR.addEventListener('input', () => { params.densPartLineW = Number(dpwR.value); });
+  document.body.appendChild(dpw);
+  const dpc = document.createElement('div');
+  dpc.id = 'denspartcol';
+  dpc.className = 'densoutl';
+  dpc.innerHTML = '<span class="lbl">line</span><button data-dpc="parts" class="word">parts</button>' + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-dpc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
+  const markDpc = () => dpc.querySelectorAll('[data-dpc]').forEach((b) => b.classList.toggle('on', b.dataset.dpc === params.densPartLineCol));
+  markDpc();
+  dpc.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-dpc]');
+    if (b) { params.densPartLineCol = b.dataset.dpc; markDpc(); }
+  });
+  document.body.appendChild(dpc);
+  const dsa = document.createElement('div');
+  dsa.id = 'densalpha';
+  dsa.innerHTML = '<span class="lbl">clear</span><input type="range" min="0" max="1" step="0.01" aria-label="shape opacity"><span class="lbl">solid</span>';
+  const dsaR = dsa.querySelector('input');
+  dsaR.value = params.densShapeA;
+  dsaR.addEventListener('input', () => { params.densShapeA = Number(dsaR.value); });
+  document.body.appendChild(dsa);
+
+  // density: the outside's colour (knob caps, speaker holes, the screen): as it is, or one of the swatches
+  const doc = document.createElement('div');
+  doc.id = 'densoutcol';
+  doc.innerHTML = '<span class="lbl">outside</span><button data-doc="real" class="word">real</button>' + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-doc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
+  const markDoc = () => doc.querySelectorAll('[data-doc]').forEach((b) => b.classList.toggle('on', b.dataset.doc === (params.densOutCol ?? 'real')));
+  markDoc();
+  doc.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-doc]');
+    if (b) { params.densOutCol = b.dataset.doc; markDoc(); }
+  });
+  document.body.appendChild(doc);
+
   // density: its colours (one ramp each)
   const dpl = document.createElement('div');
   dpl.id = 'denspal';
-  dpl.innerHTML = '<span class="lbl">colour</span>' + CONFIG.density.palettes.map((r, i) =>
+  dpl.innerHTML = '<span class="lbl">colour</span>' + (CROSS ? CROSS_PALETTE.density : CONFIG.density.palettes).map((r, i) =>
     `<button data-dp="${i}" title="palette ${i + 1}" style="--sw:${r[3]}"></button>`).join('');
   const markDp = () => dpl.querySelectorAll('button').forEach((b) => b.classList.toggle('on', Number(b.dataset.dp) === params.densPalette));
   markDp();
@@ -290,9 +357,22 @@ export function createViewToggle({ orbit } = {}) {
   markDl();
   dln.addEventListener('click', (e) => {
     const b = e.target.closest('[data-dl]');
-    if (b) { params.densLines[b.dataset.dl] = !params.densLines[b.dataset.dl]; markDl(); }
+    if (b) { params.densLines[b.dataset.dl] = !params.densLines[b.dataset.dl]; markDl(); markOutl(); }
   });
   document.body.appendChild(dln);
+  // the line controls (thickness · colour · opacity) show with any outline: the parts' look, or the outlines on
+  function markOutl() {
+    document.body.classList.toggle('dens-outline', params.densPartStyle === 'outline' || !!params.densLines.object || !!params.densLines.parts);
+  }
+  markOutl();
+  const dpo = document.createElement('div');
+  dpo.id = 'denspartop';
+  dpo.className = 'densoutl';
+  dpo.innerHTML = '<span class="lbl">line faint</span><input type="range" min="0.1" max="1" step="0.01" aria-label="outline opacity"><span class="lbl">solid</span>';
+  const dpoR = dpo.querySelector('input');
+  dpoR.value = params.densPartLineA;
+  dpoR.addEventListener('input', () => { params.densPartLineA = Number(dpoR.value); });
+  document.body.appendChild(dpo);
 
   // lab · dots grid only: object outline, part outlines, hi-fi parts — each on / off
   const gso = document.createElement('div');
@@ -349,7 +429,7 @@ export function createViewToggle({ orbit } = {}) {
   fro.innerHTML = '<span class="lbl">clear</span><input type="range" min="0" max="1" step="0.01" aria-label="frost"><span class="lbl">frosted</span>';
   const froR = fro.querySelector('input');
   froR.value = params.frost;
-  froR.addEventListener('input', () => { params[params.view === 'density' ? 'densFrost' : 'frost'] = Number(froR.value); });   // (density: its own)
+  froR.addEventListener('input', () => { params[params.view === 'density' ? 'densFrost' : params.view === 'flathd2' ? 'flatFrost' : 'frost'] = Number(froR.value); });   // (density, flat hd 2: their own)
   document.body.appendChild(fro);
 
   // cross only: does the frost go with the tiles (pixel by pixel) or stay on the shape's place?
@@ -392,20 +472,93 @@ export function createViewToggle({ orbit } = {}) {
   // flat hd 2: lines in colour or grey · parts filled or as outlines (one pill)
   const fls = document.createElement('div');
   fls.id = 'flatlines';
-  fls.innerHTML = '<span class="lbl">lines</span><button data-fl="colour">colour</button><button data-fl="grey">grey</button>'
-    + '<span class="lbl sep">parts</span><button data-fp="fill">fill</button><button data-fp="outline">outline</button>';
+  fls.innerHTML = '<span class="lbl">lines</span>' + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-flc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('')
+    + (CROSS ? '' : '<span class="lbl sep">parts</span><button data-fp="fill">fill</button><button data-fp="outline">outline</button>');
+  // (the cross page: the parts' fill / outline in a pill of its own, beside the parts' other controls)
+  const fpm = document.createElement('div');
+  fpm.id = 'flatpartsmode';
+  fpm.className = 'flatpill';
+  fpm.innerHTML = '<span class="lbl">parts</span><button data-fp="fill">fill</button><button data-fp="outline">outline</button>';
   const markFls = () => {
-    fls.querySelectorAll('[data-fl]').forEach((b) => b.classList.toggle('on', b.dataset.fl === params.flatLines));
-    fls.querySelectorAll('[data-fp]').forEach((b) => b.classList.toggle('on', b.dataset.fp === params.flatParts));
+    fls.querySelectorAll('[data-flc]').forEach((b) => b.classList.toggle('on', b.dataset.flc === params.flatLineCol));
+    [...fls.querySelectorAll('[data-fp]'), ...fpm.querySelectorAll('[data-fp]')].forEach((b) => b.classList.toggle('on', b.dataset.fp === params.flatParts));
   };
   markFls();
   fls.addEventListener('click', (e) => {
-    const a = e.target.closest('[data-fl]'), b = e.target.closest('[data-fp]');
-    if (a) params.flatLines = a.dataset.fl;
+    const a = e.target.closest('[data-flc]'), b = e.target.closest('[data-fp]');
+    if (a) params.flatLineCol = a.dataset.flc;
     if (b) params.flatParts = b.dataset.fp;
     markFls();
   });
   document.body.appendChild(fls);
+  if (CROSS) {
+    fpm.addEventListener('click', (e) => { const b = e.target.closest('[data-fp]'); if (b) { params.flatParts = b.dataset.fp; markFls(); } });
+    document.body.appendChild(fpm);
+  }
+
+  // flat hd 2 (cross page): the parts in grey or in one colour's scale (they light up on the nodes' hover) · the line's weight
+  if (CROSS) {
+    const ft = document.createElement('div');
+    ft.id = 'flattone';
+    const tones = [['grey', '#9a9a96'], ['orange', CROSS_PALETTE.density[0][4]], ['aqua', CROSS_PALETTE.density[1][4]], ['olive', CROSS_PALETTE.density[2][4]], ['taupe', CROSS_PALETTE.density[3][4]]];
+    ft.innerHTML = '<span class="lbl">parts</span>' + tones.map(([k, c]) => `<button data-ft="${k}" title="${k}" style="--sw:${c}"></button>`).join('')
+      + '<button data-ft="colour" class="word">colour</button>';
+    const markFt = () => ft.querySelectorAll('[data-ft]').forEach((b) => b.classList.toggle('on', b.dataset.ft === params.flatTone));
+    markFt();
+    ft.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-ft]');
+      if (b) { params.flatTone = b.dataset.ft; markFt(); }
+    });
+    document.body.appendChild(ft);
+    const fw = document.createElement('div');
+    fw.id = 'flatthin';
+    fw.innerHTML = '<span class="lbl">thin</span><input type="range" min="0.3" max="2.5" step="0.01" aria-label="line weight"><span class="lbl">thick</span>';
+    const fwR = fw.querySelector('input');
+    fwR.value = params.flatLineW;
+    fwR.addEventListener('input', () => { params.flatLineW = Number(fwR.value); });
+    document.body.appendChild(fw);
+    // …the outside (screen, knobs, speaker holes): the lines' colour, or one of its own
+    const foc = document.createElement('div');
+    foc.id = 'flatoutcol';
+    foc.innerHTML = '<span class="lbl">outside</span><button data-foc="same" class="word">same</button>' + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-foc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
+    const markFoc = () => foc.querySelectorAll('[data-foc]').forEach((b) => b.classList.toggle('on', b.dataset.foc === params.flatOutCol));
+    markFoc();
+    foc.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-foc]');
+      if (b) { params.flatOutCol = b.dataset.foc; markFoc(); }
+    });
+    document.body.appendChild(foc);
+    // …the shade (faces seen edge-on) on / off · the parts' outlines broken or whole
+    const fsh = document.createElement('div');
+    fsh.id = 'flatshade';
+    fsh.innerHTML = '<span class="lbl">shade</span><button data-fsh="1">on</button><button data-fsh="0">off</button>';
+    const fpl = document.createElement('div');
+    fpl.id = 'flatpartlines';
+    fpl.className = 'flatpill';
+    fpl.innerHTML = '<span class="lbl">part lines</span><button data-fpb="1">broken</button><button data-fpb="0">whole</button>';
+    const markFsh = () => {
+      fsh.querySelectorAll('[data-fsh]').forEach((b) => b.classList.toggle('on', (b.dataset.fsh === '1') === (params.flatShade !== false)));
+      fpl.querySelectorAll('[data-fpb]').forEach((b) => b.classList.toggle('on', (b.dataset.fpb === '1') === (params.flatPartsBroken !== false)));
+    };
+    fpl.addEventListener('click', (e) => { const b = e.target.closest('[data-fpb]'); if (b) { params.flatPartsBroken = b.dataset.fpb === '1'; markFsh(); } });
+    document.body.appendChild(fpl);
+    markFsh();
+    fsh.addEventListener('click', (e) => {
+      const a = e.target.closest('[data-fsh]'), b = e.target.closest('[data-fpb]');
+      if (a) params.flatShade = a.dataset.fsh === '1';
+      if (b) params.flatPartsBroken = b.dataset.fpb === '1';
+      markFsh();
+    });
+    document.body.appendChild(fsh);
+    // …and a fill on the shape's surfaces, in the outline's colour: how see-through
+    const ff = document.createElement('div');
+    ff.id = 'flatfill';
+    ff.innerHTML = '<span class="lbl">no fill</span><input type="range" min="0" max="1" step="0.01" aria-label="surface fill"><span class="lbl">fill</span>';
+    const ffR = ff.querySelector('input');
+    ffR.value = params.flatSkinFill;
+    ffR.addEventListener('input', () => { params.flatSkinFill = Number(ffR.value); });
+    document.body.appendChild(ff);
+  }
 
   // flat hd 2: how alive the drawing is at rest (the shape breathes, the line trembles)
   const fal = document.createElement('div');
@@ -455,7 +608,11 @@ export function createViewToggle({ orbit } = {}) {
     };
     markVt();
     vt.addEventListener('click', () => { document.body.classList.toggle('hide-viewctl'); markVt(); });
-    document.body.appendChild(vt);
+    // (the arrow is gone from the page: in its place, a small hint — every view turns by dragging)
+    const hint = document.createElement('div');
+    hint.id = 'draghint';
+    hint.textContent = 'drag to rotate';
+    document.body.appendChild(hint);
   }
 
   // the look (bottom right): look a = prototype (reference cards, warm, grey pixel 3d) ·
@@ -475,6 +632,155 @@ export function createViewToggle({ orbit } = {}) {
     if (b) { params.look = Number(b.dataset.look); markLook(); }
   });
   document.body.appendChild(looks);
+
+  if (CROSS) {
+    // left: the view and the angle snap, as modifiers (where the components list was)
+    const left = document.createElement('div');
+    left.id = 'leftmods';
+    const vw = document.createElement('div');
+    vw.className = 'lmod lviews';
+    vw.innerHTML = '<span class="lbl">view</span><div class="vgrid">' + VIEW_CELLS.map((c, i) => `<button data-i="${i}" title="${c.name}">${VIEW_ICONS[c.top ? 'top' : c.k]}</button>`).join('') + '</div>';
+    const markVw = () => {
+      const cur = orbit?.current();
+      if (!cur) return;
+      const k8 = ((cur.k % 8) + 8) % 8;
+      vw.querySelectorAll('[data-i]').forEach((b) => { const c = VIEW_CELLS[Number(b.dataset.i)]; b.classList.toggle('on', c.top ? !!cur.top : !cur.top && !cur.free && c.k === k8); });
+    };
+    vw.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-i]');
+      if (!b || !orbit) return;
+      const c = VIEW_CELLS[Number(b.dataset.i)];
+      if (c.top) orbit.goTo(null, true); else orbit.goTo(c.k, false);
+    });
+    orbit?.onChange(markVw);
+    markVw();
+    const sn = document.createElement('div');
+    sn.className = 'lmod lsnap';
+    const SN = [['free', 'free'], ['10', '10°'], ['20', '20°'], ['views', '90°']];
+    sn.innerHTML = '<span class="lbl">angle snap</span>' + SN.map(([k, t]) => `<button data-snap="${k}">${t}</button>`).join('');
+    const markSn = () => sn.querySelectorAll('[data-snap]').forEach((b) => b.classList.toggle('on', b.dataset.snap === params.angleSnap));
+    markSn();
+    sn.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-snap]');
+      if (b) { params.angleSnap = b.dataset.snap; markSn(); }
+    });
+    left.append(vw, sn);
+    document.body.appendChild(left);
+
+    // right: every view's modifiers in one tidy column — the ones shown now, stacked from the bottom
+    // in their own order, one width, one gap (they are placed one by one in CSS: this packs them)
+    const SKIP = new Set(['viewtoggle', 'pagelink', 'viewctl-toggle', 'leftmods']);
+    let pending = 0;
+    const packRight = () => {
+      pending = 0;
+      const els = [...document.body.children].filter((el) => {
+        if (SKIP.has(el.id) || el.classList.contains('node')) return false;
+        const cs = getComputedStyle(el);
+        return cs.position === 'fixed' && cs.display !== 'none' && cs.right === '20px' && cs.left !== '0px' && cs.top !== '20px';
+      });
+      // their order: as the stylesheet stacks them (the lower, the earlier) — density: its own, top to bottom,
+      // the parts and everything about their outline together
+      const ORDER = params.view === 'density' ? ['densedge', 'densgrain', 'densstyle', 'denspal', 'densglow', 'densmotion', 'densdiverge', 'denssoft',
+        'denstrans', 'frost', 'densalpha', 'insideop', 'outsideop', 'densoutcol', 'densparts', 'denslines', 'denspartlw', 'denspartop', 'denspartcol', 'snapstyle']
+        : params.view === 'flathd2' ? ['flatlines', 'flatthin', 'flatfill', 'flatshade',
+          'unfinished', 'unfgaps', 'unftwice', 'unfhand', 'unfspeed', 'flatalive',
+          'flatpartsmode', 'flatpartlines', 'flattone', 'frost', 'insideop',
+          'outsideop', 'flatoutcol', 'snapstyle'] : null;
+      els.forEach((el) => { el.style.bottom = ''; el.style.minWidth = ''; });
+      const rank = (el) => (ORDER && ORDER.includes(el.id) ? -ORDER.indexOf(el.id) : null);
+      els.sort((a, b) => {
+        const ra = rank(a), rb = rank(b);
+        if (ra !== null && rb !== null) return ra - rb;
+        return parseFloat(getComputedStyle(a).bottom) - parseFloat(getComputedStyle(b).bottom);
+      });
+      els.forEach((el) => el.classList.add('rmod'));
+      const wMax = Math.max(268, ...els.map((el) => el.offsetWidth));   // (one width: the widest)
+      let y = 20;
+      for (const el of els) {
+        el.style.minWidth = `${wMax}px`;
+        el.style.bottom = `${y}px`;
+        y += el.offsetHeight + 6;
+      }
+    };
+    const schedule = () => { if (!pending) pending = requestAnimationFrame(packRight); };
+    new MutationObserver(schedule).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    window.addEventListener('resize', schedule);
+    setTimeout(packRight, 0);
+    window.__packRight = packRight;   // debug: pack now (rAF is paused in a hidden tab)
+
+    // hover a modifier: a small box top right says in one sentence what it does
+    const TIPS = {
+      // left
+      lviews: 'Turns the object to a fixed angle: front, sides, back or from above.',
+      lsnap: 'How the object settles when you let go of a drag: free, or snapping to 10°, 20° or 90° steps.',
+      shp: 'The primitive shape the body is built on.',
+      spk: 'The speaker inside: its size and power.',
+      scr: 'The screen on the face: which display it is.',
+      eng: 'The energy source that powers the object.',
+      whl: 'The knobs on the object.',
+      // pegboard
+      crossbright: 'Makes the body lighter or darker.',
+      voxshimmer: 'How much the loose voxels shimmer while the object turns.',
+      voxels: 'How many loose voxels fly around while the object turns.',
+      frostfollow: 'Whether the frost follows the tiles as they build up, or stays all the time.',
+      crossdetail: 'From an abstract read of the object to one with more detail.',
+      partstyle: 'How the parts inside are drawn.',
+      crossanim: 'How the tiles appear when the view changes.',
+      shimmer: 'How much the tiles shimmer at rest.',
+      snapstyle: 'The marker shown where a knob or part can snap.',
+      // napkin
+      flatlines: 'The colour of the drawing.',
+      flatthin: 'How thick the drawn lines are.',
+      flatfill: 'A see-through fill on the body’s surfaces, in the line colour.',
+      flatshade: 'The shading on faces seen almost edge-on.',
+      unfinished: 'Leaves the drawing finished, or unfinished with missing strokes.',
+      unfgaps: 'How many strokes are missing from the drawing.',
+      unftwice: 'How many strokes are gone over a second time.',
+      unfhand: 'How much the hand trembles as it draws.',
+      unfspeed: 'How fast the gaps in the drawing move around.',
+      flatalive: 'How much the line and the shape breathe at rest.',
+      flatpartsmode: 'Parts inside drawn as filled shapes or as outlines.',
+      flatpartlines: 'The parts’ outlines broken like the drawing, or whole.',
+      flattone: 'The colour scale of the parts inside.',
+      flatoutcol: 'The colour of what sits outside: screen, knobs, speaker holes.',
+      // density
+      densedge: 'How crisp or hazy the edge of the shape is.',
+      densgrain: 'How smooth or grainy the shape is.',
+      densstyle: 'The rendering style of the shape.',
+      denspal: 'The colour of the shape.',
+      densglow: 'Flat colour, or lit from above like coloured glass.',
+      densmotion: 'How much the shape moves and flows.',
+      densdiverge: 'How faithfully the shape follows the object, or strays freely from it.',
+      denssoft: 'How tight or soft the shape is around the object.',
+      densalpha: 'How see-through the shape is.',
+      densoutcol: 'The colour of what sits outside: screen, knobs, speaker holes.',
+      densparts: 'How the parts inside are drawn.',
+      denslines: 'Adds outlines to the object and / or its parts.',
+      denspartlw: 'How thick the outlines are.',
+      denspartop: 'How solid the outlines are.',
+      denspartcol: 'The colour of the outlines.',
+    };
+    const tipFor = (el) => {
+      const v = params.view;
+      if (el.id === 'frost') return v === 'flathd2' ? 'How blurred the parts inside are.' : 'How frosted the parts inside look, as through frosted glass.';
+      if (el.id === 'insideop') return 'How visible the parts inside are.';
+      if (el.id === 'outsideop') return 'How visible what sits outside is: screen, knobs, speaker holes.';
+      if (TIPS[el.id]) return TIPS[el.id];
+      for (const c of el.classList) if (TIPS[c]) return TIPS[c];
+      return null;
+    };
+    const tip = document.createElement('div');
+    tip.id = 'modtip';
+    document.body.appendChild(tip);
+    let tipEl = null;
+    window.addEventListener('pointermove', (e) => {
+      const el = e.target.closest?.('.rmod, #leftmods .lmod, #leftmods .node');
+      const t = el ? tipFor(el) : null;
+      if (!t) { if (tipEl) { tip.classList.remove('on'); tipEl = null; } return; }
+      if (el !== tipEl) { tip.textContent = t; tipEl = el; tip.classList.add('on'); }   // (shown top right: style.css)
+    }, { passive: true });
+    window.addEventListener('pointerdown', () => { tip.classList.remove('on'); tipEl = null; }, { passive: true });
+  }
 
   set(params.view);
   return { set };

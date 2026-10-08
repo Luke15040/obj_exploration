@@ -1,17 +1,22 @@
-import { CONFIG } from '../config.js?v=202610080154';
-import { state, params, onChange, addExtra, updateExtra, removeExtra, mountNormal } from '../state.js?v=202610080154';
-import { view } from '../view.js?v=202610080154';
-import { Spring } from '../body/springs.js?v=202610080154';
-import { snapRay, resnap, frontPoint, shapeSpots, faceAnchors } from '../body/sdf.js?v=202610080154';
-import { FREE_SLOTS, freeKnobSpots } from '../parts.js?v=202610080154';
-import { holePattern } from '../speaker-patterns.js?v=202610080154';
-import { drawMarkers } from './markers.js?v=202610080154';
-import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js?v=202610080154';
+import { CONFIG } from '../config.js?v=202610081559';
+import { state, params, onChange, addExtra, updateExtra, removeExtra, mountNormal } from '../state.js?v=202610081559';
+import { view } from '../view.js?v=202610081559';
+import { Spring } from '../body/springs.js?v=202610081559';
+import { snapRay, resnap, frontPoint, shapeSpots, faceAnchors } from '../body/sdf.js?v=202610081559';
+import { FREE_SLOTS, freeKnobSpots } from '../parts.js?v=202610081559';
+import { holePattern } from '../speaker-patterns.js?v=202610081559';
+import { drawMarkers } from './markers.js?v=202610081559';
+import { pathOf, segsOf, hull, basis, circle3, cylinderLines, facing } from './wire.js?v=202610081559';
+
+/** DOM writes only when the value changed: a write, even of the same value, can make the page lay out again. */
+const setA = (el, k, v) => { v = String(v); if (el.getAttribute(k) !== v) el.setAttribute(k, v); };
+const setText = (el, v) => { if (el.textContent !== v) el.textContent = v; };
+const setStyle = (el, k, v) => { v = String(v); if (el.style[k] !== v) el.style[k] = v; };
 
 const NS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs = {}, parent) => {
   const n = document.createElementNS(NS, tag);
-  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  for (const k in attrs) setA(n, k, attrs[k]);
   if (parent) parent.appendChild(n);
   return n;
 };
@@ -368,10 +373,10 @@ export function createExtras(svg, { onPulse, offsets = () => [], dotGrid = null 
         const holes = holePattern(state.speakerPattern).map(([x, y]) => add(p, add(mul(u, x * R), mul(v, y * R))));
         const visible = facing(n, p);
         const rings = holes.map((h) => pathOf(circle3(h, n, hr, 12), true)).join(' ');
-        r.main.setAttribute('d', visible ? rings : '');
-        r.hidden.setAttribute('d', visible ? '' : rings);
-        r.soft.setAttribute('d', '');
-        r.accent.setAttribute('d', '');
+        setA(r.main, 'd', visible ? rings : '');
+        setA(r.hidden, 'd', visible ? '' : rings);
+        setA(r.soft, 'd', '');
+        setA(r.accent, 'd', '');
         r.main.removeAttribute('stroke-dasharray');
         pts = circle3(p, n, R + hr + 3, 24);
         center = view.project(...p);
@@ -380,10 +385,10 @@ export function createExtras(svg, { onPulse, offsets = () => [], dotGrid = null 
         const c = add(p, mul(n, h / 2));
         const L = cylinderLines(c, n, Math.max(0.01, def.r * s), Math.max(0.01, h / 2), 36);
         const top = L.caps[1]; // the cap away from the surface
-        r.main.setAttribute('d', L.caps.filter((k) => k.visible).map((k) => pathOf(k.pts, true)).join(' ') + ' ' + segsOf(L.sil));
-        r.hidden.setAttribute('d', L.caps.filter((k) => !k.visible).map((k) => pathOf(k.pts, true)).join(' '));
+        setA(r.main, 'd', L.caps.filter((k) => k.visible).map((k) => pathOf(k.pts, true)).join(' ') + ' ' + segsOf(L.sil));
+        setA(r.hidden, 'd', L.caps.filter((k) => !k.visible).map((k) => pathOf(k.pts, true)).join(' '));
         // wireframe draws itself in
-        if (r.draw < 1) r.main.setAttribute('stroke-dasharray', `${easeOut(r.draw)} 1`);
+        if (r.draw < 1) setA(r.main, 'stroke-dasharray', `${easeOut(r.draw)} 1`);
         else r.main.removeAttribute('stroke-dasharray');
         // indicator line on the top face
         const [u, v] = basis(n);
@@ -391,35 +396,35 @@ export function createExtras(svg, { onPulse, offsets = () => [], dotGrid = null 
         const dir = add(mul(u, Math.cos(a)), mul(v, Math.sin(a)));
         const a0 = view.project(...add(top.c, mul(dir, def.r * s * 0.25)));
         const a1 = view.project(...add(top.c, mul(dir, def.r * s * 0.85)));
-        r.accent.setAttribute('d', segsOf([[a0, a1]]));
-        r.soft.setAttribute('d', '');
+        setA(r.accent, 'd', segsOf([[a0, a1]]));
+        setA(r.soft, 'd', '');
         pts = L.pts;
         center = L.center;
       }
 
-      r.hit.setAttribute('d', s > 0.05 ? pathOf(hull(pts), true) : '');
+      setA(r.hit, 'd', s > 0.05 ? pathOf(hull(pts), true) : '');
       let x0 = Infinity, y0 = Infinity;
       for (const q of pts) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); }
-      r.label.setAttribute('x', x0);
-      r.label.setAttribute('y', y0 - 8);
-      r.label.textContent = r.type === 'knob' ? `knob ${Math.round(r.angle.value)}°` : 'speaker';
+      setA(r.label, 'x', x0);
+      setA(r.label, 'y', y0 - 8);
+      setText(r.label, r.type === 'knob' ? `knob ${Math.round(r.angle.value)}°` : 'speaker');
 
       // magnet: dashed field line from the cursor's closest point to the part
       if (r.float && drag?.id === r.id) {
         const a0 = view.project(...r.float);
-        r.magnet.setAttribute('d', segsOf([[a0, center]]));
-        r.magnet.style.opacity = drag.attached ? 0.9 : 0.35;
+        setA(r.magnet, 'd', segsOf([[a0, center]]));
+        setStyle(r.magnet, 'opacity', drag.attached ? 0.9 : 0.35);
       } else {
-        r.magnet.setAttribute('d', '');
+        setA(r.magnet, 'd', '');
       }
 
       // click-in burst: a ring that expands over the surface and fades
       if (r.burstT < 0.6) {
         const k = easeOut(r.burstT / 0.6);
-        r.burst.setAttribute('d', pathOf(circle3(r.burstAt, r.burstN, (def.r + 4) * (1.1 + 1.6 * k), 40), true));
-        r.burst.style.opacity = 1 - k;
+        setA(r.burst, 'd', pathOf(circle3(r.burstAt, r.burstN, (def.r + 4) * (1.1 + 1.6 * k), 40), true));
+        setStyle(r.burst, 'opacity', 1 - k);
       } else {
-        r.burst.setAttribute('d', '');
+        setA(r.burst, 'd', '');
       }
     }
   }
