@@ -1614,3 +1614,9 @@ body[data-page="cross"] #tools-toggle, #draghint { display: none !important; }
 #modtip { background: none; border: 0; box-shadow: none; padding: 0; text-align: right; color: var(--ink-soft); }
 /* the cross page: no log (bottom left) */
 body[data-page="cross"] #toolbox { display: none !important; }
+
+/* the view modifier: a map from above — the object in the middle, the camera's eight places around it */
+#leftmods .vwrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+#leftmods .vgrid svg path { stroke-linecap: round; stroke-linejoin: round; }
+#leftmods .vgrid button[data-i="4"] svg { width: 18px; height: 18px; }
+#leftmods .vname { font-size: 10px; color: var(--ink-soft); white-space: nowrap; }

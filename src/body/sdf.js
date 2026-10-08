@@ -1,6 +1,6 @@
-import { CONFIG } from '../config.js?v=202610081559';
-import { state, onChange } from '../state.js?v=202610081559';
-import { layoutParts } from '../parts.js?v=202610081559';
+import { CONFIG } from '../config.js?v=202610081603';
+import { state, onChange } from '../state.js?v=202610081603';
+import { layoutParts } from '../parts.js?v=202610081603';
 
 /**
  * CPU mirror of the shader's surface — used to place add-ons on the object

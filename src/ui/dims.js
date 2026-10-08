@@ -1,5 +1,5 @@
-import { state } from '../state.js?v=202610081559';
-import { view } from '../view.js?v=202610081559';
+import { state } from '../state.js?v=202610081603';
+import { view } from '../view.js?v=202610081603';
 
 const NS = 'http://www.w3.org/2000/svg';
 const OFF = 16;      // px: dimension line off the object's edge

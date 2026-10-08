@@ -1,6 +1,6 @@
-import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610081559';
-import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610081559';
-import { params } from '../state.js?v=202610081559';
+import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610081603';
+import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610081603';
+import { params } from '../state.js?v=202610081603';
 
 // three pages: the main one, lab.html with every particle / dither experiment, cross.html with only the cross view
 const LAB = document.body.dataset.page === 'lab';
@@ -639,12 +639,28 @@ export function createViewToggle({ orbit } = {}) {
     left.id = 'leftmods';
     const vw = document.createElement('div');
     vw.className = 'lmod lviews';
-    vw.innerHTML = '<span class="lbl">view</span><div class="vgrid">' + VIEW_CELLS.map((c, i) => `<button data-i="${i}" title="${c.name}">${VIEW_ICONS[c.top ? 'top' : c.k]}</button>`).join('') + '</div>';
+    // a map seen from above: the object in the middle (its front edge drawn thicker, at the bottom), and around
+    // it the eight places the camera can stand, each an arrow looking at the object; the middle = from above
+    const VNAME = ['back left', 'back', 'back right', 'left', 'from above', 'right', 'front left', 'front', 'front right'];
+    const camIcon = (i) => {
+      if (i === 4) return '<svg viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1"/><path d="M4 12h8" class="edge"/></svg>';
+      const dx = (i % 3) - 1, dy = Math.floor(i / 3) - 1;
+      const rot = Math.atan2(-dy, -dx) * 180 / Math.PI - 90;   // (the arrow points down, turned toward the middle)
+      return `<svg viewBox="0 0 16 16"><path d="M8 3.5v8M5.2 8.7 8 11.5l2.8-2.8" transform="rotate(${rot} 8 8)"/></svg>`;
+    };
+    vw.innerHTML = '<span class="lbl">view</span><div class="vwrap"><div class="vgrid">' + VIEW_CELLS.map((c, i) => `<button data-i="${i}" aria-label="${VNAME[i]}">${camIcon(i)}</button>`).join('') + '</div><div class="vname"></div></div>';
+    const vname = vw.querySelector('.vname');
     const markVw = () => {
       const cur = orbit?.current();
       if (!cur) return;
       const k8 = ((cur.k % 8) + 8) % 8;
-      vw.querySelectorAll('[data-i]').forEach((b) => { const c = VIEW_CELLS[Number(b.dataset.i)]; b.classList.toggle('on', c.top ? !!cur.top : !cur.top && !cur.free && c.k === k8); });
+      let name = 'free';
+      vw.querySelectorAll('[data-i]').forEach((b) => {
+        const i = Number(b.dataset.i), c = VIEW_CELLS[i], on = c.top ? !!cur.top : !cur.top && !cur.free && c.k === k8;
+        b.classList.toggle('on', on);
+        if (on) name = VNAME[i];
+      });
+      vname.textContent = name;
     };
     vw.addEventListener('click', (e) => {
       const b = e.target.closest('[data-i]');
@@ -760,8 +776,10 @@ export function createViewToggle({ orbit } = {}) {
       denspartop: 'How solid the outlines are.',
       denspartcol: 'The colour of the outlines.',
     };
-    const tipFor = (el) => {
+    const tipFor = (el, target) => {
       const v = params.view;
+      const cell = target?.closest?.('.lviews [data-i]');
+      if (cell) return `Look at the object from ${['the back left', 'the back', 'the back right', 'the left', 'above', 'the right', 'the front left', 'the front', 'the front right'][Number(cell.dataset.i)]}.`;
       if (el.id === 'frost') return v === 'flathd2' ? 'How blurred the parts inside are.' : 'How frosted the parts inside look, as through frosted glass.';
       if (el.id === 'insideop') return 'How visible the parts inside are.';
       if (el.id === 'outsideop') return 'How visible what sits outside is: screen, knobs, speaker holes.';
@@ -775,9 +793,9 @@ export function createViewToggle({ orbit } = {}) {
     let tipEl = null;
     window.addEventListener('pointermove', (e) => {
       const el = e.target.closest?.('.rmod, #leftmods .lmod, #leftmods .node');
-      const t = el ? tipFor(el) : null;
+      const t = el ? tipFor(el, e.target) : null;
       if (!t) { if (tipEl) { tip.classList.remove('on'); tipEl = null; } return; }
-      if (el !== tipEl) { tip.textContent = t; tipEl = el; tip.classList.add('on'); }   // (shown top right: style.css)
+      if (tip.textContent !== t || !tipEl) { tip.textContent = t; tipEl = el; tip.classList.add('on'); }   // (shown top right: style.css)
     }, { passive: true });
     window.addEventListener('pointerdown', () => { tip.classList.remove('on'); tipEl = null; }, { passive: true });
   }

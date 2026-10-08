@@ -1,4 +1,4 @@
-import { view } from '../view.js?v=202610081559';
+import { view } from '../view.js?v=202610081603';
 
 const NS = 'http://www.w3.org/2000/svg';
 
