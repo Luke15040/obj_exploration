@@ -1,6 +1,6 @@
-import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610081630';
-import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610081630';
-import { params } from '../state.js?v=202610081630';
+import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610091041';
+import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610091041';
+import { params } from '../state.js?v=202610091041';
 
 // three pages: the main one, lab.html with every particle / dither experiment, cross.html with only the cross view
 const LAB = document.body.dataset.page === 'lab';
@@ -10,7 +10,7 @@ const LAB_MODES = ['dots', 'dotsgrid', 'pixel', 'pixel2', 'live', 'particles', '
 const MODES = LAB ? LAB_MODES : CROSS ? ['cross', 'flathd2', 'density'] : MAIN_MODES;
 // the cross page's density starts as the soft ball: the outside on top, no outlines
 // (the defaults below are the look settled on: a pink soft ball, lit, the inside frosted behind it)
-if (CROSS) Object.assign(params, { unfinished: true, unfinishedSpeed: 0.16, flatAlive: 0.5, unfHand: 0.38, unfTwice: 0.49, unfGaps: 0.48, flatFrost: 0.07, flatInside: 0.21, flatOutside: 0.95, crossBright: 0.78, flatTone: 'taupe', flatLineW: 1.4, flatSkinFill: 0.08, flatLines: 'colour', flatParts: 'fill',
+if (CROSS) Object.assign(params, { unfinished: true, unfinishedSpeed: 0.2, flatAlive: 0.24, unfHand: 0.38, unfTwice: 0.49, unfGaps: 0.78, flatFrost: 0.07, flatInside: 0.22, flatOutside: 0.93, crossBright: 0.78, flatTone: 'taupe', flatLineW: 1.4, flatSkinFill: 0.08, flatLines: 'colour', flatParts: 'fill',
   flatLineCol: 'grey', flatOutCol: 'olive', flatShade: false, flatPartsBroken: true,   // (napkin: the user's screenshot, 2026-10-08)
   densGrain: 0.38, densEdge: 0.48, densStyle: 'grainy', densOutside: 0.78, densInside: 1, densFrost: 0.19, densMotion: 0.95, densDiverge: 0.07, densSoft: 0.18, densPalette: 3, densGlow: 0.58, densPartStyle: 'outline', densShapeA: 0.76, densTrans: 'free', densLines: { object: false, parts: false },
   densOutCol: 'grey', densPartLineW: 1.15, densPartLineA: 0.89, densPartLineCol: 'white' });   // (density: the user's screenshot, 2026-10-08)

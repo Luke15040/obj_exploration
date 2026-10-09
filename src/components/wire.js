@@ -1,4 +1,4 @@
-import { view } from '../view.js?v=202610081630';
+import { view } from '../view.js?v=202610091041';
 
 /**
  * Shared wireframe helpers: projection-aware primitives drawn as SVG paths.
