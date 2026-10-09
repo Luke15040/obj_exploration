@@ -1,0 +1,1641 @@
+:root {
+  /* warm off-white and ink, in tune with the reference cards (sand frames, dark bodies) */
+  --bg-center: #f3f3f1;
+  --bg-mid: #f1f0ee;
+  --bg-edge: #e8e7e3;
+  --ink: #1f1e21;
+  --ink-strong: #000000;
+  --ink-soft: #8b8985;
+  --hair: #d8d6d0;      /* panel borders, rules */
+  --field: #f5f5f3;     /* inputs */
+  --surface: rgba(245, 244, 241, 0.9);   /* boxes, chips */
+  --surface-a: rgba(245, 244, 241, 0.95);
+  --accent: #1e1e20;    /* active links, travelling reference */
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  /* the only gradient on the page: a soft radial vignette */
+  background: radial-gradient(ellipse 75% 70% at 50% 48%, var(--bg-center) 0%, var(--bg-mid) 50%, var(--bg-edge) 100%);
+  background-color: var(--bg-mid);
+  font-family: var(--mono);
+  color: var(--ink);
+}
+
+#body-layer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  /* backing store is exactly device-pixel sized (set in JS), dots are antialiased in the shader */
+  pointer-events: none;
+}
+
+#components-layer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  z-index: 2;
+}
+
+/* ---------- components ---------- */
+
+#components-layer { cursor: move; }               /* empty space orbits the camera */
+.part { cursor: grab; }
+body.is-dragging, body.is-dragging .part,
+body.is-orbiting #components-layer { cursor: grabbing; }
+
+/* hairline outlines; transparent fill keeps the whole part grabbable */
+.part .shape {
+  stroke-width: 1;
+  transition: stroke 160ms ease;
+}
+.part .shape.hidden { stroke-dasharray: 2 3; opacity: 0.6; }
+.part:hover .shape.primary,
+.part.dragging .shape.primary { stroke: var(--ink-strong); }
+
+/* annotations: ticks, crosshair, live coordinates */
+.part .anno {
+  opacity: 0.55;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+}
+.part .anno.tick, .part .anno.cross { stroke-width: 1; }
+.part .anno.label {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-style: italic;
+  letter-spacing: 0.02em;
+}
+.part:hover .anno, .part.dragging .anno { opacity: 1; }
+
+/* faint dashed halo for hover / drag */
+.part .halo {
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  opacity: 0;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+}
+.part:hover .halo { opacity: 0.5; }
+.part.dragging .halo { opacity: 0.9; }
+
+/* add-ons */
+.part .shape.accent { stroke-width: 1.5; }
+.magnet { stroke-width: 1; stroke-dasharray: 1 4; pointer-events: none; transition: opacity 120ms ease; }
+.burst { stroke-width: 1; pointer-events: none; }
+
+#toolbar {
+  position: fixed;
+  left: 20px;
+  top: 60px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  text-transform: lowercase;
+  z-index: 3;
+  white-space: nowrap;
+}
+#toolbar button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+#toolbar button:hover { border-color: var(--ink-soft); color: var(--ink-strong); }
+#toolbar button:active { transform: translateY(1px); }
+#toolbar.full button { opacity: 0.35; pointer-events: none; }
+#toolbar .hint { color: var(--ink-soft); margin-left: 6px; }
+#toolbar .hint { display: none; }
+#toolbar:hover .hint { display: inline; }
+
+/* guided prompts: the typed prompt large at the top, the choices small below */
+#prompt {
+  position: fixed;
+  left: 50%;
+  top: 104px;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 260px);
+  font-size: 20px;
+  min-height: 28px;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+  text-transform: lowercase;
+  white-space: nowrap;
+  z-index: 3;
+  pointer-events: none;
+}
+#prompt .caret { color: var(--ink-soft); margin-right: 10px; }
+#prompt .cursor {
+  display: inline-block;
+  width: 11px;
+  height: 21px;
+  margin-left: 3px;
+  vertical-align: -3px;
+  background: var(--ink);
+  animation: blink 1s steps(1) infinite;
+}
+#prompt.done { color: var(--ink-soft); }
+@keyframes blink { 50% { opacity: 0; } }
+
+#chips {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  width: max-content; /* centred with left:50%, so don't shrink to half the viewport */
+  max-width: calc(100vw - 300px);
+  z-index: 3;
+}
+#chips button {
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  padding: 5px 11px;
+  cursor: pointer;
+  text-transform: lowercase;
+  transition: border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+#chips button:hover { border-color: var(--ink-soft); color: var(--ink-strong); }
+#chips button.ghost { color: var(--ink-soft); }
+#chips.busy button { opacity: 0.35; pointer-events: none; }
+
+@media (max-width: 760px) {
+  #prompt { top: 62px; font-size: 14px; max-width: calc(100vw - 32px); white-space: normal; text-align: center; }
+  #chips { bottom: 60px; max-width: calc(100vw - 32px); }
+}
+
+/* wheels are not library parts: no crisp outline over their points (only while hovered / dragged) */
+body:not(.mode-blocks) .part[data-part^="wheel"] .shape { opacity: 0; }
+body:not(.mode-blocks) .part[data-part^="wheel"]:hover .shape.primary,
+body:not(.mode-blocks) .part[data-part^="wheel"].dragging .shape.primary { opacity: 1; }
+
+/* blocks view: the shader draws every visible outline; the SVG parts only
+   show their contour while hovered or dragged (and keep their grab areas) */
+body.mode-blocks .part .shape,
+body.mode-blocks .part .anno,
+body.mode-blocks .part .halo { opacity: 0; }
+body.mode-blocks .part:hover .shape.primary,
+body.mode-blocks .part.dragging .shape.primary { opacity: 1; }
+
+#viewtoggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  z-index: 3;
+}
+#viewtoggle .grp { display: flex; border: 1px solid var(--hair); border-radius: 999px; overflow: hidden; background: var(--surface); }
+#viewtoggle button {
+  font: inherit;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  padding: 5px 14px;
+  cursor: pointer;
+  text-transform: lowercase;
+  transition: color 160ms ease, background 160ms ease;
+}
+#viewtoggle button.on { color: var(--bg-center); background: var(--ink); }
+/* the chosen view is still being prepared (its shaders compiling): the last one stays, the button breathes */
+body.view-compiling #viewtoggle button.on { animation: view-prep 0.9s ease-in-out infinite alternate; }
+@keyframes view-prep { from { opacity: 1; } to { opacity: 0.4; } }
+#viewtoggle button:not(.on):hover { color: var(--ink-strong); }
+
+/* case 1 / case 2 switch, top left (same look as the view toggle) */
+#casetoggle {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  overflow: hidden;
+  font-size: 11px;
+  z-index: 3;
+  background: var(--surface);
+}
+#casetoggle button {
+  font: inherit;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  padding: 5px 14px;
+  cursor: pointer;
+  text-transform: lowercase;
+  transition: color 160ms ease, background 160ms ease;
+}
+#casetoggle button.on { color: var(--bg-center); background: var(--ink); }
+#casetoggle button:not(.on):hover { color: var(--ink-strong); }
+#casetoggle.busy { pointer-events: none; opacity: 0.5; }
+
+/* case 2: shape picker — icons only, a vertical column at the right */
+#shapetoggle {
+  position: fixed;
+  top: 64px;
+  right: 20px;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 3;
+}
+body.kind-speaker #shapetoggle { display: flex; }
+#shapetoggle button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+  cursor: pointer;
+  padding: 0;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+#shapetoggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+#shapetoggle button.on { color: var(--bg-center); background: var(--ink); border-color: var(--ink); }
+#shapetoggle button.dice { margin-top: 8px; border-style: dashed; }
+#shapetoggle button.dice.on { border-style: solid; }
+
+#shapetoggle button:not(.on):hover { color: var(--ink-strong); border-color: var(--ink-soft); }
+
+/* horizontal guides while dragging */
+.guides line { stroke-width: 1; }
+.guides { opacity: 0; transition: opacity 200ms ease; pointer-events: none; }
+.guides.on { opacity: 1; }
+
+/* ---------- debug panel ---------- */
+
+#debug {
+  position: fixed;
+  top: 62px;
+  right: 16px;
+  width: min(248px, calc(100vw - 32px));
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: var(--surface-a);
+  border: 1px solid var(--hair);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  text-transform: lowercase;
+  display: none;
+  user-select: none;
+  z-index: 3;
+}
+#debug.open { display: block; }
+#debug h2 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 500;
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink);
+}
+#debug h2 span { color: var(--ink-soft); font-weight: 400; }
+#debug .row { margin-bottom: 8px; }
+#debug .row label {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-soft);
+  margin-bottom: 2px;
+}
+#debug .row label output { color: var(--ink); }
+#debug input[type="range"] { width: 100%; margin: 0; accent-color: #1f1e1c; }
+#debug select {
+  width: 100%;
+  font: inherit;
+  padding: 2px 4px;
+  background: var(--field);
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  color: var(--ink);
+}
+#debug .check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+#debug .check input { margin: 0; accent-color: #1f1e1c; }
+#debug hr { border: 0; border-top: 1px solid var(--hair); margin: 10px 0; }
+#debug button {
+  font: inherit;
+  padding: 3px 8px;
+  background: var(--field);
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  color: var(--ink);
+  cursor: pointer;
+}
+#debug .buttons { display: flex; gap: 6px; }
+#debug pre {
+  margin: 8px 0 0;
+  font: inherit;
+  font-size: 10px;
+  color: var(--ink-soft);
+  white-space: pre;
+}
+
+/* split-compare labels */
+.split-label {
+  position: fixed;
+  bottom: 18px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-transform: lowercase;
+  pointer-events: none;
+  display: none;
+}
+.split-label.left { right: calc(50% + 14px); }
+.split-label.right { left: calc(50% + 14px); }
+body.split .split-label { display: block; }
+.split-line {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  border-left: 1px dashed var(--hair);
+  pointer-events: none;
+  display: none;
+  z-index: 1; /* above the body canvas, below the components */
+}
+body.split .split-line { display: block; }
+
+/* ---------- node boxes (references, speaker): terminal style ---------- */
+
+#links {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+.link { fill: none; stroke-width: 1; }
+.link.pink { stroke: var(--accent); }
+.link.ink { stroke: var(--ink-soft); stroke-width: 0.6; opacity: 0.35; stroke-dasharray: none; }
+.link-dot.pink { fill: var(--accent); }
+.link-dot.ink { fill: var(--ink-soft); opacity: 0.35; r: 2; }
+.link-pulse { fill: #e2472f; filter: drop-shadow(0 0 4px rgba(226, 71, 47, 0.6)); }
+
+.node {
+  position: fixed;
+  z-index: 3;
+  font-size: 11px;
+  text-transform: lowercase;
+  transition: opacity 320ms ease, transform 420ms cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+.node.hidden { opacity: 0; transform: translateY(8px); pointer-events: none; }
+/* label sits on the box's top border, like a terminal pane title */
+.node .tab {
+  position: absolute;
+  top: -7px;
+  left: 10px;
+  padding: 0 6px;
+  background: var(--bg-mid);
+  color: var(--ink-soft);
+  line-height: 14px;
+}
+.node .tab::after { content: ' ─'; color: var(--hair); }
+.node .card {
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  padding: 12px 10px 10px;
+}
+.node.ref { left: 48px; top: 120px; }
+.node.ref .tab { color: var(--ink); }
+.slots { display: grid; grid-template-columns: repeat(2, 64px); gap: 6px; }
+.slot {
+  width: 64px;
+  height: 64px;
+  border: 1px dashed var(--hair);
+  border-radius: 2px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft);
+  font-size: 13px;
+  overflow: hidden;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+.slot img { width: 100%; height: 100%; object-fit: cover; display: block; filter: grayscale(1) contrast(1.05); }
+.slot.filled { cursor: pointer; border-style: solid; }
+.slot.filled:hover { border-color: var(--ink); }
+.slot.hover { border: 1px solid var(--ink-strong); color: var(--ink-strong); }
+.slot.pop img { animation: pop 380ms cubic-bezier(0.2, 1.6, 0.4, 1); }
+body.is-dragging-ref .node.ref .slot:not(.filled) { border-color: var(--ink-soft); }
+@keyframes pop { from { transform: scale(0.7); } to { transform: scale(1); } }
+
+/* the offered reference image, under the prompt */
+.tray {
+  /* placed next to the references node by nodes.js, in the free space below its connector */
+  position: fixed;
+  top: 210px;
+  left: 280px;
+  transform: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 6px;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  font-size: 11px;
+  z-index: 3;
+  transition: opacity 300ms ease, transform 380ms cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+.tray.hidden { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+.tray .thumb {
+  width: 54px;
+  height: 54px;
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  transition: opacity 160ms ease, border-color 160ms ease;
+}
+.tray .thumb:hover { border-color: var(--ink-soft); }
+.tray .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; filter: grayscale(1); }
+.tray .thumb.lifted { opacity: 0.3; }
+.tray-text { display: flex; flex-direction: column; gap: 2px; }
+.tray-text b { font-weight: 400; color: var(--ink); }
+.tray-text .hint { font-size: 10px; color: var(--ink-soft); animation: hint-pulse 1.8s ease-in-out infinite; }
+@keyframes hint-pulse { 50% { opacity: 0.45; } }
+.drag-ghost {
+  position: fixed;
+  width: 54px;
+  height: 54px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 10;
+  transform: rotate(-3deg) scale(1.06);
+}
+.drag-ghost img { width: 100%; height: 100%; object-fit: cover; display: block; filter: grayscale(1); }
+.drag-ghost.settle {
+  transition: left 240ms ease, top 240ms ease, width 240ms ease, height 240ms ease, transform 240ms ease;
+  transform: none;
+}
+body.is-dragging-ref, body.is-dragging-ref * { cursor: grabbing !important; }
+
+/* speaker node */
+
+/* tool nodes (speaker, screen): title · ‹ drawing › · tags, all in the terminal style */
+.node.tool .card { width: 196px; }
+.node.tool .pick-title { color: var(--ink); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node.tool .picker { display: grid; grid-template-columns: 14px minmax(0, 1fr) 14px; align-items: center; }
+.node.tool .viz { border: 0; background: none; padding: 2px 2px; min-width: 0; }
+/* the speaker tool is a compact one */
+.node.tool.spk .card { width: 132px; }
+.node.tool.spk .viz svg { width: 64px; margin: 0 auto; }
+.node.tool.spk .seg { margin-top: 4px; }
+.node.tool .pick-name { color: var(--ink); text-align: center; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node.tool .viz svg { display: block; width: 100%; height: auto; }
+.node.tool .arrow { font: inherit; font-size: 15px; line-height: 1; color: var(--ink-soft); background: none; border: 0; padding: 0; cursor: pointer; }
+.node.tool .arrow:hover { color: var(--ink-strong); }
+.node.tool .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 0; }
+.node.tool .tags span { border: 1px solid var(--hair); border-radius: 999px; padding: 1px 8px; color: var(--ink-soft); background: var(--surface); }
+.node.tool .seg { margin-top: 8px; }
+.spk .viz svg circle { fill: var(--ink); }
+.scr .board { fill: none; stroke: var(--ink-soft); stroke-width: 0.5; }
+.scr .hole { fill: none; stroke: var(--ink-soft); stroke-width: 0.4; }
+.scr .glass { fill: #1d1d20; }
+.scr .px { fill: #3b393c; }
+.scr .px.on { fill: #ff5ab4; }
+.scr .px.mono { fill: #f4f4f4; }
+.scr .smile { fill: none; stroke: #f4f4f4; stroke-width: 1.2; stroke-linecap: round; }
+/* pixel 3d: colour / grey shape switch, bottom right */
+/* look a / look b (bottom right), same pill as the case switch */
+#looks {
+  position: fixed; right: 20px; bottom: 22px; z-index: 3;
+  display: flex; border: 1px solid var(--hair); border-radius: 999px; overflow: hidden;
+  font-size: 11px; background: var(--surface);
+}
+#looks button {
+  font: inherit; color: var(--ink-soft); background: none; border: 0; padding: 5px 14px; cursor: pointer;
+  text-transform: lowercase; transition: color 160ms ease, background 160ms ease;
+}
+#looks button.on { color: var(--bg-center); background: var(--ink); }
+#looks button:not(.on):hover { color: var(--ink-strong); }
+/* show / hide the tools (pill next to the case switch) */
+#tools-toggle {
+  position: fixed; top: 20px; left: 240px; z-index: 3;
+  font: inherit; font-size: 11px; color: var(--ink-soft); text-transform: lowercase;
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+#tools-toggle.on { color: var(--ink); }
+/* tool nodes can be dragged by their label / card */
+.node.tool .tab, .node.tool .card { cursor: grab; }
+.node.tool.dragging, .node.tool.dragging .tab, .node.tool.dragging .card { cursor: grabbing; transition: opacity 320ms ease; }
+.node.tool button, .node.tool svg { cursor: pointer; }
+/* tool list: icons at the right edge, like the shapes */
+#toolbox {
+  position: fixed; left: 20px; bottom: 22px; z-index: 3; font-size: 11px;
+  display: flex; flex-direction: row; align-items: center; gap: 2px;
+  padding: 8px 8px 5px; background: var(--surface); border: 1px solid var(--hair); border-radius: 3px;
+}
+/* 'log' sits on the box's top border, like the other node labels */
+#toolbox .lbl { position: absolute; top: -7px; left: 10px; padding: 0 6px; line-height: 14px; background: var(--bg-mid); color: var(--ink-soft); }
+#toolbox .lbl::after { content: ' ─'; color: var(--hair); }
+#toolbox button {
+  width: 26px; height: 26px; display: grid; place-items: center; padding: 0; cursor: pointer;
+  color: var(--ink-soft); background: none; border: 0;
+  transition: color 160ms ease;
+}
+#toolbox svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+#toolbox button.on { color: var(--ink-strong); }
+#toolbox button:not(.on):hover { color: var(--ink-strong); }
+/* tool nodes stack on the right (their top is set by nodes.js); left of the shape column in case 2 */
+.node.tool { right: 20px; transition: opacity 320ms ease; }
+/* screen: compact too */
+.node.tool.scr .card { width: 132px; }
+.node.tool.scr .viz svg { width: 76px; margin: 0 auto; }
+.node.tool.scr .pick-name { margin-top: 2px; font-size: 10px; }
+/* shape tool: six forms in a 3 × 2 grid */
+.node.tool.shp .card { width: 132px; padding: 12px 8px 8px; }
+.shp .forms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+.shp .forms button { height: 34px; display: grid; place-items: center; padding: 0; background: none; border: 0; border-radius: 3px; color: var(--ink-soft); cursor: pointer; }
+.shp .forms button:hover { color: var(--ink-strong); }
+.shp .forms button.on { color: var(--ink-strong); background: var(--bg-center); }
+.shp .forms svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+/* energy source: compact, like the speaker */
+.node.tool.eng .card { width: 132px; padding: 12px 8px 7px; }   /* wide enough for the 'energy source' label */
+.node.tool.eng .viz svg { width: 46px; margin: 0 auto; }
+.node.tool.eng .pick-name { margin-top: 0; font-size: 10px; }
+/* energy source drawings */
+.eng .board, .eng .cable { fill: none; stroke: var(--ink-soft); stroke-width: 0.8; stroke-linejoin: round; stroke-linecap: round; }
+.eng .glass { fill: #1d1d20; }
+.eng .bolt { fill: var(--ink); }
+.spk .viz.beat svg { animation: beat 260ms ease-out; }
+@keyframes beat { 30% { transform: scale(1.12); fill: #e2472f; } }
+.spk .seg { display: flex; justify-content: space-between; }
+.spk .seg.types { justify-content: center; gap: 10px; margin-bottom: 2px; }
+.spk .seg.voices[hidden] { display: none; }
+.spk .seg button {
+  font: inherit;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  padding: 2px 0;
+  cursor: pointer;
+}
+.spk .seg button::before { content: '\00a0'; }
+.spk .seg button::after { content: '\00a0'; }
+.spk .seg button:hover { color: var(--ink); }
+.spk .seg button.on { color: var(--ink-strong); }
+.spk .seg button.on::before { content: '['; }
+.spk .seg button.on::after { content: ']'; }
+
+@media (max-width: 760px) {
+  .node.ref { left: 12px; top: 110px; transform-origin: top left; scale: 0.8; }
+  .node.spk { right: 12px; top: auto; bottom: 110px; scale: 0.8; transform-origin: bottom right; }
+  .tray { top: 96px; }
+}
+
+/* components list (left side) */
+.node.bom { left: 20px; top: clamp(140px, calc(100vh - 350px), 320px); }   /* moves up on short windows, clear of the log */
+/* text only: no box, no scroll */
+.bom .rows { width: 220px; line-height: 1.55; color: var(--ink); }
+.bom .sec { color: var(--ink-soft); margin-top: 10px; }
+.bom .sec:first-child { margin-top: 0; }
+.bom .row.part { cursor: default; transition: color 120ms ease; }
+.bom .row.part:hover { color: var(--ink-strong); text-decoration: underline; text-underline-offset: 3px; }
+.bom .num { display: inline-block; min-width: 26px; color: var(--ink-soft); font-size: 10px; }
+.bom .soft, .bom .line { color: var(--ink-soft); }
+.bom .line span { white-space: nowrap; }
+.bom .legend { margin-top: 10px; color: var(--ink-soft); font-size: 10px; opacity: 0.8; }
+@media (max-width: 760px) { .node.bom { display: none; } }
+
+/* paper grain over everything (pointer-transparent) */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+  opacity: 0.22;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.42  0 0 0 0 0.42  0 0 0 0 0.43  0 0 0 0.45 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* flat view: part numbers on the ink shapes (match the components list) */
+.part-labels { pointer-events: none; opacity: 0; transition: opacity 300ms ease; }
+body.mode-flat .part-labels, body.mode-pixel .part-labels, body.mode-empty .part-labels, body.mode-orbital .part-labels { opacity: 1; }
+body.mode-orbital .part-labels text { fill: #1e1e20; stroke: #f4f3f0; stroke-width: 3px; font-size: 11px; }
+body.mode-empty .part-labels text { fill: #2f2fa8; stroke: none; font-size: 12px; }
+body.look-1.mode-empty .part-labels text { fill: #3a3732; }
+.part-labels text {
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 2.5px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  fill: #ffffff;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+/* pixel view: parts as circles, cables as thin lime lines */
+.diagram { pointer-events: none; opacity: 0; transition: opacity 300ms ease; }
+body.mode-pixel .diagram { opacity: 1; }
+.diagram polyline { fill: none; stroke: #cfe81a; stroke-width: 1.6; stroke-linejoin: round; }
+.diagram g:nth-child(2) circle { fill: #1f4d36; }
+.diagram g:nth-child(3) { display: none; } /* parts are coloured cells in the mosaic now */
+
+/* ---------- look 2: the original cool greys ---------- */
+body.look-2 {
+  --bg-center: #efeff0; --bg-mid: #e7e7e8; --bg-edge: #d7d7d9;
+  --ink: #1e1e20; --ink-soft: #88888c; --hair: #cdcdd0; --field: #f3f3f4;
+  --surface: rgba(238, 238, 239, 0.88); --surface-a: rgba(238, 238, 239, 0.94);
+}
+/* in look 2 the node header melts away: the label sits on the border as before */
+.node .hdr { display: contents; }
+.node .ctl { display: none; }
+
+/* ---------- look 1: nodes (tools + references) as the reference cards ---------- */
+/* warm mid-grey bodies in a sand frame; the title tab and the body are joined with fillets */
+.node.tool, .node.ref {
+  --nd-frame: #d5cfc3; --nd-edge: #c7c0b2; --nd-body: #1d1c20; --nd-ink: #efede8; --nd-soft: #9a968e; --nd-cell: #2b2a2f;
+  --nd-tab-h: 28px;
+}
+body.look-1 .node.tool, body.look-1 .node.ref {
+  background: var(--nd-frame);
+  border: 1px solid var(--nd-edge);
+  border-radius: 10px;
+  padding: 4px;
+  text-transform: none;
+  box-shadow: 0 8px 22px rgba(60, 54, 44, 0.10);
+}
+body.look-1 .node .hdr { display: flex; align-items: stretch; justify-content: space-between; height: var(--nd-tab-h); }
+body.look-1 .node .ctl { display: flex; align-items: center; gap: 9px; padding: 0 9px 0 34px; }
+body.look-1 .node.tool .tab, body.look-1 .node.ref .tab {
+  position: relative;
+  top: auto; left: auto;
+  background: var(--nd-body);
+  color: var(--nd-ink);
+  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: var(--nd-tab-h);
+  padding: 0 4px 0 12px;
+  border-radius: 7px 0 0 0;
+  white-space: nowrap;
+  z-index: 0;
+}
+/* the slanted side of the tab, rounded where it turns at the top */
+body.look-1 .node.tool .tab::after, body.look-1 .node.ref .tab::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -12px;
+  width: 44px;            /* reaches well back under the tab, so no sliver of frame shows at the base */
+  background: var(--nd-body);
+  border-top-right-radius: 5px;
+  transform: skewX(22deg);
+  transform-origin: top left;
+  z-index: -1;
+}
+/* the concave fillet where the slant meets the top of the body */
+body.look-1 .node.tool .tab::before, body.look-1 .node.ref .tab::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: calc(100% + 20px);
+  width: 6px;
+  height: 6px;
+  background: radial-gradient(circle at 100% 0, transparent 5.5px, var(--nd-body) 6px);
+}
+.node .ctl .grip { width: 11px; height: 11px; background: radial-gradient(circle, #6a675f 1.3px, transparent 1.6px) 0 0 / 5.5px 5.5px; }
+.node .ctl .x { font: inherit; font-size: 16px; line-height: 1; color: #6a675f; background: none; border: 0; padding: 0 1px 1px; cursor: pointer; }
+.node .ctl .x:hover { color: #34322d; }
+body.look-1 .node.tool .card, body.look-1 .node.ref .card {
+  background: var(--nd-body);
+  border: 0;
+  border-radius: 0 7px 7px 7px;
+  color: var(--nd-ink);
+}
+body.look-1 .node.tool .card { padding: 11px 9px 10px; }
+body.look-1 .node.tool.shp .card, body.look-1 .node.tool.scr .card, body.look-1 .node.tool.spk .card, body.look-1 .node.tool.eng .card { width: auto; }
+body.look-1 .node.tool.shp { width: 184px; }
+body.look-1 .node.tool.scr { width: 172px; }
+body.look-1 .node.tool.spk { width: 164px; }
+body.look-1 .node.tool.eng { width: 196px; }
+body.look-1 .node.tool .arrow { color: var(--nd-soft); }
+body.look-1 .node.tool .arrow:hover { color: var(--nd-ink); }
+body.look-1 .node.tool .pick-name { color: var(--nd-ink); }
+body.look-1 .spk .viz svg circle { fill: var(--nd-ink); }
+body.look-1 .spk .seg button { color: var(--nd-soft); }
+body.look-1 .spk .seg button:hover, body.look-1 .spk .seg button.on { color: var(--nd-ink); }
+body.look-1 .scr .board, body.look-1 .scr .hole { stroke: #8f8b83; }
+body.look-1 .scr .glass { fill: #0b0b0d; stroke: #3b3a3e; stroke-width: 0.4; }
+body.look-1 .eng .board, body.look-1 .eng .cable { stroke: #b8b3aa; }
+body.look-1 .eng .glass { fill: #0b0b0d; }
+body.look-1 .eng .bolt { fill: var(--nd-ink); }
+body.look-1 .shp .forms { gap: 4px; }
+body.look-1 .shp .forms button { height: 40px; color: var(--nd-ink); }
+body.look-1 .shp .forms button:hover { color: #ffffff; }
+body.look-1 .shp .forms button.on { color: var(--nd-ink); background: none; }
+body.look-1 .shp .forms button.on svg { fill: var(--nd-ink); }
+body.look-1 .shp .forms svg { width: 23px; height: 23px; stroke-width: 1.5; }
+body.look-1 .node.ref .card { padding: 6px; }
+body.look-1 .node.ref .slots { grid-template-columns: repeat(2, 72px); gap: 5px; }
+body.look-1 .node.ref .slot { width: 72px; height: 72px; border: 0; border-radius: 5px; background: var(--nd-cell); color: var(--nd-soft); font-size: 15px; }
+body.look-1 .node.ref .slot.filled { background: #bdbab4; }
+body.look-1 .node.ref .slot.filled:hover, body.look-1 .node.ref .slot.hover { box-shadow: inset 0 0 0 1px var(--nd-ink); color: var(--nd-ink); }
+body.look-1.is-dragging-ref .node.ref .slot:not(.filled) { color: var(--nd-ink); box-shadow: inset 0 0 0 1px var(--nd-soft); }
+body.look-1 .tray { background: #1d1c20; border: 4px solid #d5cfc3; border-radius: 10px; color: #efede8; box-shadow: 0 8px 22px rgba(60, 54, 44, 0.10); }
+body.look-1 .tray .thumb { border-color: #3b3a3e; border-radius: 5px; }
+body.look-1 .tray-text b { color: #efede8; }
+body.look-1 .tray-text .hint { color: #9a968e; }
+
+/* views node: elevations on the edges, axonometric views at the corners, plan in the middle */
+.node.tool.vws .card { width: auto; padding: 12px 8px 7px; }
+.vws .grid { display: grid; grid-template-columns: repeat(3, 26px); gap: 1px; }
+.vws .grid button {
+  width: 26px; height: 26px; display: grid; place-items: center; padding: 0; cursor: pointer;
+  color: var(--ink-soft); background: none; border: 0; border-radius: 3px;
+  transition: color 160ms ease, background 160ms ease;
+}
+.vws .grid svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; }
+.vws .grid button:hover { color: var(--ink-strong); }
+.vws .grid button.on { color: var(--ink-strong); background: var(--bg-center); }
+
+/* live view: the page goes black, the UI follows (dark surfaces, light ink) */
+body.mode-live {
+  --bg-center: #0b0b0c; --bg-mid: #070708; --bg-edge: #020203;
+  --ink: #e9e7e2; --ink-strong: #ffffff; --ink-soft: #8a8883; --hair: #2c2c2f;
+  --field: #141416; --surface: rgba(18, 18, 20, 0.9); --surface-a: rgba(18, 18, 20, 0.95); --accent: #e9e7e2;
+}
+body.mode-live::after { opacity: 0.12; mix-blend-mode: screen; }
+
+/* flat hd 2: lighter part numbers */
+body[data-page="cross"] .part-labels { display: none; }   /* the cross page: no part numbers */
+body.mode-flathd2 .part-labels text { font-weight: 400; font-size: 11px; stroke-width: 1.6px; stroke: rgba(0, 0, 0, 0.25); }
+
+/* snap marker style (bottom right, above the looks) */
+#snapstyle {
+  position: fixed; right: 20px; bottom: 58px; z-index: 3; display: flex; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#snapstyle .lbl { margin-right: 4px; }
+#snapstyle button { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#snapstyle button:hover { color: var(--ink-strong); }
+#snapstyle button.on { color: var(--bg-center); background: var(--ink); }
+#snapstyle svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+
+/* cross only: transition style to compare (above the snap pill) */
+#crossanim {
+  position: fixed; right: 20px; bottom: 130px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-cross #crossanim { display: flex; }
+#crossanim .lbl { margin-right: 4px; }
+#crossanim button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#crossanim button:hover { color: var(--ink-strong); }
+#crossanim button.on { color: var(--bg-center); background: var(--ink); }
+
+/* views node: the front marked on every compass icon */
+.vws .grid svg .front { fill: currentColor; fill-opacity: 0.55; }
+.vws .grid svg .edge { stroke-width: 2.6; }
+/* views node: the view cube (switch with compass / cube under it) */
+.vws .vcube { display: none; width: 96px; height: 96px; margin: 0 auto; overflow: visible; }
+.vws.as-cube .vcube { display: block; }
+.vws.as-cube .grid { display: none; }
+.vws {
+  --vc-face: #f5f5f6; --vc-front: #d9d9dd; --vc-hover: #c9c9ce; --vc-on: #1e1e20; --vc-on-text: #f5f5f6;
+  --vc-line: #9a9a9f; --vc-text: #2a2a2d; --vc-corner: #f5f5f6;
+}
+body.look-1 .vws {   /* look a: the dark card inside the sand frame */
+  --vc-face: #2b2a2f; --vc-front: #3e3c43; --vc-hover: #4b4951; --vc-on: #d5cfc3; --vc-on-text: #1d1c20;
+  --vc-line: #6f6c68; --vc-text: #efede8; --vc-corner: #1d1c20;
+}
+.vcube .face { fill: var(--vc-face); stroke: var(--vc-line); stroke-width: 0.9; stroke-linejoin: round; cursor: pointer; transition: fill 140ms ease; }
+.vcube .face.front { fill: var(--vc-front); }
+.vcube .face.none { fill: var(--vc-front); opacity: 0.6; cursor: default; pointer-events: none; }
+.vcube .face:hover { fill: var(--vc-hover); }
+.vcube .face.on { fill: var(--vc-on); stroke: var(--vc-on); }
+.vcube text { font: 600 6.6px var(--mono); letter-spacing: 0.08em; fill: var(--vc-text); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.vcube text.on { fill: var(--vc-on-text); }
+.vcube .corner { fill: var(--vc-corner); stroke: var(--vc-line); stroke-width: 0.9; cursor: pointer; transition: fill 140ms ease; }
+.vcube .corner:hover { fill: var(--vc-hover); }
+.vcube .corner.on { fill: var(--vc-on); stroke: var(--vc-on); }
+.vws .mode { display: flex; justify-content: center; gap: 2px; margin-top: 6px; }
+.vws .mode button { font: inherit; font-size: 10px; padding: 2px 7px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+.vws .mode button:hover { color: var(--ink-strong); }
+.vws .mode button.on { color: var(--bg-center); background: var(--ink); }
+
+/* cross only: shimmer slider (between the snap pill and the anim pill) */
+#shimmer {
+  position: fixed; right: 20px; bottom: 94px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-cross #shimmer { display: flex; }
+#shimmer input { width: 96px; accent-color: var(--ink); }
+
+/* views node in look a: compass icons and the switch in the node's light-on-dark ink */
+body.look-1 .vws .grid button { color: var(--nd-soft); }
+body.look-1 .vws .grid button:hover { color: var(--nd-ink); }
+body.look-1 .vws .grid button.on { color: var(--nd-ink); background: var(--nd-cell); }
+body.look-1 .vws .mode button { color: var(--nd-soft); }
+body.look-1 .vws .mode button:hover { color: var(--nd-ink); }
+body.look-1 .vws .mode button.on { color: #1d1c20; background: #d5cfc3; }
+body.look-1 .node.tool.vws .card { width: auto; }
+
+/* marker view: the pale blue page of the reference */
+body.mode-marker { --bg-center: #d6dfec; --bg-mid: #cdd7e6; --bg-edge: #c2cddf; }
+
+/* density view: the pale tint of the plot's page */
+/* density: the same page as the other views (no tint) */
+
+/* cross only: how the parts are drawn (above the anim pill) */
+#partstyle {
+  position: fixed; right: 20px; bottom: 166px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 14px;
+  flex-wrap: wrap; justify-content: flex-end; max-width: 460px;   /* two rows: it was far too wide */
+}
+body.mode-cross #partstyle { display: flex; }
+#partstyle .lbl { margin-right: 4px; }
+#partstyle button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#partstyle button:hover { color: var(--ink-strong); }
+#partstyle button.on { color: var(--bg-center); background: var(--ink); }
+
+/* density only: snaps always / on drag */
+#densnap {
+  position: fixed; right: 20px; bottom: 94px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-density #densnap { display: flex; }
+#densnap .lbl { margin-right: 4px; }
+#densnap button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#densnap button:hover { color: var(--ink-strong); }
+#densnap button.on { color: var(--bg-center); background: var(--ink); }
+
+/* particles view: black page, UI in light ink (as the live view was) */
+body.mode-particles {
+  --bg-center: #050506; --bg-mid: #020203; --bg-edge: #000000;
+  --ink: #e9e7e2; --ink-strong: #ffffff; --ink-soft: #8a8883; --hair: #2c2c2f;
+  --field: #141416; --surface: rgba(18, 18, 20, 0.9); --surface-a: rgba(18, 18, 20, 0.95); --accent: #e9e7e2;
+}
+body.mode-particles::after { opacity: 0.1; mix-blend-mode: screen; }
+/* the particles control panel */
+#ptpanel {
+  position: fixed; left: 20px; top: 104px; z-index: 4; width: 214px; display: none;
+  padding: 10px 12px 8px; font-size: 10.5px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 4px;
+}
+body.mode-particles #ptpanel { display: block; }
+#ptpanel .ttl { color: var(--ink); margin-bottom: 6px; letter-spacing: 0.06em; }
+#ptpanel .row { display: grid; grid-template-columns: 70px 1fr 30px; align-items: center; gap: 6px; margin: 3px 0; }
+#ptpanel .row input[type=range] { width: 100%; accent-color: var(--ink); }
+#ptpanel .row .val { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+#ptpanel .seg { display: flex; gap: 2px; grid-column: 2 / 4; }
+#ptpanel .seg button { flex: 1; font: inherit; padding: 2px 0; background: none; border: 1px solid var(--hair); border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#ptpanel .seg button.on { color: var(--bg-center); background: var(--ink); border-color: var(--ink); }
+#ptpanel .sep { height: 1px; background: var(--hair); margin: 7px 0; }
+/* the frame (ref: a box with coordinates, corner ticks, a crosshair and side guides) */
+#ptframe { position: fixed; inset: 0; pointer-events: none; z-index: 1; display: none; }
+body.mode-particles #ptframe.on { display: block; }
+#ptframe * { vector-effect: non-scaling-stroke; }
+
+/* density only: motion slider (above the snaps pill) */
+#densmotion {
+  position: fixed; right: 20px; bottom: 130px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-density #densmotion { display: flex; }
+#densmotion input { width: 96px; accent-color: var(--ink); }
+
+
+/* the link between the two pages (top right, under the view switch) */
+#pagelink { position: fixed; right: 20px; top: 52px; z-index: 3; display: flex; gap: 6px; }
+body[data-page="cross"] #pagelink { top: 20px; }
+#pagelink a {
+  font-size: 11px; text-decoration: none;
+  padding: 4px 12px; color: var(--ink-soft); background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#pagelink a:hover { color: var(--ink-strong); }
+
+/* ---------- cross page: loading veil (cells pulsing, like the shape building) ---------- */
+#loading {
+  position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 14px;
+  background: radial-gradient(ellipse 75% 70% at 50% 48%, var(--bg-center) 0%, var(--bg-mid) 50%, var(--bg-edge) 100%);
+  font-size: 11px; letter-spacing: 0.08em; color: var(--ink-soft);
+  transition: opacity 500ms ease;
+}
+#loading.done { opacity: 0; pointer-events: none; }
+#loading .cells { display: flex; gap: 6px; }
+#loading .cells i { width: 14px; height: 14px; border-radius: 4px; background: #b1aea8; animation: cellpulse 1.1s ease-in-out infinite; }
+#loading .cells i:nth-child(2) { animation-delay: 0.18s; background: #cbc9c4; }
+#loading .cells i:nth-child(3) { animation-delay: 0.36s; background: #dad8d3; }
+@keyframes cellpulse { 0%, 100% { transform: scale(0.55); } 50% { transform: scale(1); } }
+
+/* cross page: the view controls on the right can be hidden all at once */
+/* a small arrow right above the column: it slides the whole column out to the right, and back */
+#viewctl-toggle {
+  position: fixed; right: 20px; bottom: 482px; z-index: 4; width: 28px; height: 28px; display: grid; place-items: center;
+  font: inherit; font-size: 14px; line-height: 1; padding: 0;
+  color: var(--ink-soft); background: var(--surface); border: 1px solid var(--hair); border-radius: 999px; cursor: pointer;
+  transition: transform 380ms cubic-bezier(.2, .8, .2, 1);
+}
+#viewctl-toggle:hover { color: var(--ink-strong); }
+body:not(.mode-cross):not(.mode-flathd2):not(.mode-density):not(.mode-gradient) #viewctl-toggle { display: none; }
+/* flat hd 2 has the frost too: the slider and its toggle, at the bottom of the column */
+body.mode-flathd2 #frost, body.mode-flathd2 #frostfollow, body.mode-flathd2 .opslider { display: flex; }   /* (same places as in cross) */
+/* flat hd 2: finished / unfinished drawing, above the blur toggle (like the frost toggle) */
+#unfinished {
+  position: fixed; right: 20px; bottom: 444px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2 #unfinished { display: flex; }
+body.hide-viewctl #unfinished { display: none; }
+/* …and the pace of its gaps, above it, only while it is unfinished */
+#unfspeed {
+  position: fixed; right: 20px; bottom: 480px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2.unfinished-on #unfspeed { display: flex; }
+body.hide-viewctl #unfspeed { display: none; }
+/* flat hd 2: still ↔ alive, at the top of its column */
+#flatalive {
+  position: fixed; right: 20px; bottom: 408px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2 #flatalive { display: flex; }
+body.hide-viewctl #flatalive { display: none; }
+/* flat hd 2, unfinished: gaps · retraced · hand (above the pace slider, only while unfinished) */
+.unfctl {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+.unfctl input { width: 110px; accent-color: var(--ink); }
+body.mode-flathd2.unfinished-on .unfctl { display: flex; }
+body.hide-viewctl .unfctl { display: none !important; }
+#unfgaps { bottom: 516px; } #unftwice { bottom: 552px; } #unfhand { bottom: 588px; }
+/* flat hd 2: lines colour / grey · parts fill / outline, at the top of the column */
+#flatlines {
+  position: fixed; right: 20px; bottom: 624px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2 #flatlines { display: flex; }
+body.hide-viewctl #flatlines { display: none; }
+#flatlines .lbl { margin-right: 4px; }
+#flatlines .lbl.sep { margin-left: 10px; }
+#flatlines button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#flatlines button:hover { color: var(--ink-strong); }
+#flatlines button.on { color: var(--bg-center); background: var(--ink); }
+#flatlines button.sw { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); }
+#flatlines button.sw.on { border-color: var(--ink); background: var(--sw); }
+#flatalive input { width: 110px; accent-color: var(--ink); }
+/* flat hd 2 (cross page): the parts' scale (grey / one colour / colour) and the line's weight, under the inside / outside sliders */
+#flattone, #flatthin, #flatfill {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#flattone { bottom: 228px; gap: 1px; padding: 3px 4px 3px 10px; }
+#flatthin { bottom: 192px; }
+#flatfill { bottom: 156px; }
+#flatholecol { bottom: 120px; } #flatscreencol { bottom: 121px; } #flatknobcol { bottom: 122px; }
+body.mode-flathd2 .napcol { display: flex; }
+body.mode-flathd2 #flattone, body.mode-flathd2 #flatthin, body.mode-flathd2 #flatfill { display: flex; }
+body.hide-viewctl #flattone, body.hide-viewctl #flatthin, body.hide-viewctl #flatfill { display: none; }
+#flattone .lbl { margin-right: 4px; }
+#flattone button[data-ft] { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); cursor: pointer; }
+#flattone button[data-ft].on { border-color: var(--ink); }
+#flattone button.word { width: auto; height: auto; font: inherit; padding: 3px 8px; margin-left: 4px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); }
+#flattone button.word.on { color: var(--bg-center); background: var(--ink); }
+#flatthin input, #flatfill input { width: 110px; accent-color: var(--ink); }
+/* the gradient view's controls: the right-hand column (outside, round, wobble, flow, grain, colour) */
+.gradctl {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+.gradctl input { width: 110px; accent-color: var(--ink); }
+body.mode-gradient .gradctl, body.mode-gradient #outsideop { display: flex; }
+#gradround { bottom: 300px; } #gradwobble { bottom: 336px; } #gradflow { bottom: 372px; } #gradgrain { bottom: 408px; } #gradpal { bottom: 444px; gap: 1px; padding: 3px 4px 3px 10px; }
+body.mode-gradient #outsideop { bottom: 264px; }
+#gradpal .lbl { margin-right: 4px; }
+#gradpal button[data-gp] { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: linear-gradient(135deg, var(--sw) 50%, var(--sw2) 50%); cursor: pointer; }
+#gradpal button[data-gp].on { border-color: var(--ink); }
+#gradpal button.page { font: inherit; padding: 3px 8px; margin-left: 4px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#gradpal button.page.on { color: var(--bg-center); background: var(--ink); }
+body.hide-viewctl .gradctl, body.hide-viewctl.mode-gradient #outsideop { display: none !important; }
+/* density's own controls (and on the cross page: in the right-hand column, like the others) */
+#densstyle, #denssoft, #denspal, #densdiverge, #densglow {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#denssoft, #densdiverge, #densglow { gap: 8px; padding: 4px 12px 4px 10px; }
+#denssoft input, #densdiverge input, #densglow input { width: 110px; accent-color: var(--ink); }
+body[data-page="cross"].mode-density #densdiverge, body[data-page="cross"].mode-density.dens-soft #densglow { display: flex; }
+#densstyle .lbl, #denspal .lbl { margin-right: 4px; }
+#densstyle button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#densstyle button:hover { color: var(--ink-strong); }
+#densstyle button.on { color: var(--bg-center); background: var(--ink); }
+#denspal button { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); cursor: pointer; }
+#denspal button.on { border-color: var(--ink); }
+body.mode-density #densstyle, body.mode-density #denspal, body.mode-density.dens-soft #denssoft { display: flex; }
+/* density: the parts' look (as in cross) and the shape's opacity, at the foot of the column */
+#densparts, #densalpha {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#densparts { bottom: 192px; } #densalpha { bottom: 156px; gap: 8px; padding: 4px 12px 4px 10px; }
+body.mode-density #densparts, body.mode-density #densalpha { display: flex; }
+body.hide-viewctl #densparts, body.hide-viewctl #densalpha { display: none !important; }
+#densparts .lbl { margin-right: 4px; }
+#densparts button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#densparts button:hover { color: var(--ink-strong); }
+#densparts button.on { color: var(--bg-center); background: var(--ink); }
+#densalpha input { width: 110px; accent-color: var(--ink); }
+body[data-page="cross"].mode-density .opslider { display: flex; }
+body[data-page="cross"] #densnap { display: none !important; }
+body[data-page="cross"].mode-density #frost { display: flex; bottom: 336px; }
+body[data-page="cross"] #denssoft { bottom: 372px; }
+body[data-page="cross"] #densdiverge { bottom: 408px; }
+body[data-page="cross"] #densmotion { bottom: 444px; }
+body[data-page="cross"] #densglow { bottom: 480px; }
+body[data-page="cross"] #densstyle { bottom: 516px; }
+body[data-page="cross"] #denspal { bottom: 552px; }
+body[data-page="cross"] #denslines { bottom: 588px; }
+/* density, soft ball: grain and edge, above the outlines */
+.densctl {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+.densctl input { width: 110px; accent-color: var(--ink); }
+body.mode-density.dens-soft .densctl { display: flex; }
+#densgrain { bottom: 624px; } #densedge { bottom: 660px; }
+body:not([data-page="cross"]) #densgrain { bottom: 310px; } body:not([data-page="cross"]) #densedge { bottom: 346px; }
+body.hide-viewctl .densctl { display: none !important; }
+/* density (cross page): the transition while it turns, at the foot of the column */
+#denstrans {
+  position: fixed; right: 20px; bottom: 228px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body[data-page="cross"].mode-density #denstrans { display: flex; }
+body.hide-viewctl #denstrans { display: none !important; }
+#denstrans .lbl { margin-right: 4px; }
+#denstrans button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#denstrans button:hover { color: var(--ink-strong); }
+#denstrans button.on { color: var(--bg-center); background: var(--ink); }
+body:not([data-page="cross"]) #densstyle { bottom: 202px; }
+body:not([data-page="cross"]) #denspal { bottom: 238px; }
+body:not([data-page="cross"]) #denssoft { bottom: 274px; }
+body.hide-viewctl #densstyle, body.hide-viewctl #denssoft, body.hide-viewctl #densdiverge, body.hide-viewctl #densglow, body.hide-viewctl #denspal, body.hide-viewctl #densmotion,
+body.hide-viewctl #denslines { display: none !important; }
+#unfspeed input { width: 110px; accent-color: var(--ink); }
+#unfinished .lbl { margin-right: 4px; }
+#unfinished button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#unfinished button:hover { color: var(--ink-strong); }
+#unfinished button.on { color: var(--bg-center); background: var(--ink); }
+#voxshimmer, #voxels, #frostfollow, #frost, .opslider, #crossdetail, #partstyle, #crossanim, #shimmer, #snapstyle {
+  transition: transform 420ms cubic-bezier(.2, .8, .2, 1), opacity 300ms ease;
+}
+body.hide-viewctl #voxshimmer, body.hide-viewctl #voxels, body.hide-viewctl #frostfollow, body.hide-viewctl #frost,
+body.hide-viewctl .opslider, body.hide-viewctl #crossdetail, body.hide-viewctl #partstyle, body.hide-viewctl #crossanim,
+body.hide-viewctl #shimmer, body.hide-viewctl #snapstyle { transform: translateX(calc(100% + 40px)); opacity: 0; pointer-events: none; }
+
+/* ---------- block prompt (cross page): prompts as cell islands on the page grid (ui/blocks.js) ---------- */
+body[data-page="cross"] #prompt, body[data-page="cross"] #chips { display: none; }
+#promptcells { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 3; pointer-events: none; }
+html.block-hover, html.block-hover * { cursor: grab !important; }
+html.block-dragging, html.block-dragging * { cursor: grabbing !important; }
+#blockagain {
+  position: fixed; z-index: 4; font: inherit; font-size: 11px; padding: 4px 10px;
+  color: var(--ink-soft); background: var(--surface); border: 1px solid var(--hair); border-radius: 999px; cursor: pointer;
+}
+#blockagain:hover { color: var(--ink-strong); }
+#blockagain.busy { opacity: 0.35; pointer-events: none; }
+
+/* angle snap node: four icons (free · 10° · 20° · 90°) */
+.node.tool.snp .card { width: auto; padding: 12px 8px 8px; }
+.snp .snaps { display: grid; grid-template-columns: repeat(4, 34px); gap: 2px; }
+.snp .snaps button { display: grid; justify-items: center; gap: 2px; padding: 4px 0 3px; background: none; border: 0; border-radius: 3px; color: var(--ink-soft); cursor: pointer; font: inherit; font-size: 9.5px; }
+.snp .snaps button:hover { color: var(--ink-strong); }
+.snp .snaps button.on { color: var(--ink-strong); background: var(--bg-center); }
+.snp .snaps svg { width: 22px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+body.look-1 .snp .snaps button { color: var(--nd-soft); }
+body.look-1 .snp .snaps button:hover { color: var(--nd-ink); }
+body.look-1 .snp .snaps button.on { color: var(--nd-ink); background: var(--nd-cell); }
+
+/* stretch node: a pad — drag the corner (or anywhere) to make the skin wider / taller */
+.node.tool.str .card { width: auto; padding: 12px 8px 7px; }
+.str .pad { display: block; width: 112px; height: 112px; margin: 0 auto; cursor: nwse-resize; touch-action: none; color: var(--ink); }
+.str .pad .frame { fill: none; stroke: var(--hair); stroke-dasharray: 2 3; }
+.str .pad .shape { fill: currentColor; fill-opacity: 0.12; stroke: currentColor; stroke-width: 1.2; }
+.str .pad .fit { fill: none; stroke: currentColor; stroke-opacity: 0.35; stroke-dasharray: 2 2; }
+.str .pad .arrow { fill: none; stroke: currentColor; stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round; opacity: 0.7; }
+.str .pad .handle { fill: currentColor; }
+.str .val { text-align: center; margin-top: 6px; font-size: 10px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.str .size { margin-top: 6px; font-size: 10px; line-height: 1.5; color: var(--ink); font-variant-numeric: tabular-nums; text-align: center; }
+.str .size .k { color: var(--ink-soft); }
+body.look-1 .str .size { color: var(--nd-ink); }
+body.look-1 .str .size .k { color: var(--nd-soft); }
+body.look-1 .str .pad { color: var(--nd-ink); }
+body.look-1 .str .pad .frame { stroke: var(--nd-soft); stroke-opacity: 0.5; }
+body.look-1 .str .val { color: var(--nd-soft); }
+
+/* density only: outlines on / off (above the motion slider) */
+#denslines {
+  position: fixed; right: 20px; bottom: 166px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-density #denslines { display: flex; }
+#denslines .lbl { margin-right: 4px; }
+#denslines button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#denslines button:hover { color: var(--ink-strong); }
+#denslines button.on { color: var(--bg-center); background: var(--ink); }
+
+/* lab · dots grid only: extra layers on / off */
+#gridshow {
+  position: fixed; right: 20px; bottom: 58px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-dotsgrid #gridshow { display: none; }   /* (now inside the dots grid panel) */
+#gridshow .lbl { margin-right: 4px; }
+#gridshow button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#gridshow button:hover { color: var(--ink-strong); }
+#gridshow button.on { color: var(--bg-center); background: var(--ink); }
+
+/* cross only: abstraction ↔ detail (top of the stack) */
+#crossdetail {
+  position: fixed; right: 20px; bottom: 228px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-cross #crossdetail { display: flex; }
+#crossdetail input { width: 110px; accent-color: var(--ink); }
+
+/* cross only: the inside and the outside opacity, each its own slider, above the detail slider */
+.opslider {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+.opslider .lbl { width: 44px; }
+#insideop { bottom: 264px; }
+#outsideop { bottom: 300px; }
+body.mode-cross .opslider { display: flex; }
+.opslider input { width: 110px; accent-color: var(--ink); }
+
+/* cross only: clear <-> frosted parts inside the shape, above the inside/outside slider */
+#frost {
+  position: fixed; right: 20px; bottom: 336px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-cross #frost { display: flex; }
+#frost input { width: 110px; accent-color: var(--ink); }
+
+/* cross only: the frost toggle and the voxel amount, above the frost slider */
+#frostfollow, #voxels {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#frostfollow { bottom: 372px; }
+#voxels { bottom: 408px; gap: 8px; padding: 4px 12px 4px 10px; }
+#voxshimmer { position: fixed; right: 20px; bottom: 444px; z-index: 3; display: none; align-items: center; gap: 8px; padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft); background: var(--surface); border: 1px solid var(--hair); border-radius: 999px; }
+body.mode-cross #voxshimmer { display: flex; }
+#voxshimmer input { width: 110px; accent-color: var(--ink); }
+body.mode-cross #frostfollow, body.mode-cross #voxels { display: flex; }
+#frostfollow .lbl { margin-right: 4px; }
+#frostfollow button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#frostfollow button:hover { color: var(--ink-strong); }
+#frostfollow button.on { color: var(--bg-center); background: var(--ink); }
+#voxels input { width: 110px; accent-color: var(--ink); }
+
+/* lab · dots grid panel (left) */
+#gridpanel {
+  position: fixed; left: 20px; top: 104px; z-index: 4; width: 230px; display: none;
+  padding: 10px 12px 8px; font-size: 10.5px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 4px;
+}
+body.mode-dotsgrid #gridpanel { display: block; }
+#gridpanel .ttl { color: var(--ink); margin-bottom: 6px; letter-spacing: 0.06em; }
+#gridpanel .row { display: grid; grid-template-columns: 66px 1fr 32px; align-items: center; gap: 6px; margin: 3px 0; }
+#gridpanel .row input[type=range] { width: 100%; accent-color: var(--ink); }
+#gridpanel .row .val { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+#gridpanel .seg { display: flex; gap: 2px; grid-column: 2 / 4; }
+#gridpanel .seg button { flex: 1; font: inherit; padding: 2px 0; background: none; border: 1px solid var(--hair); border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#gridpanel .seg button.on { color: var(--bg-center); background: var(--ink); border-color: var(--ink); }
+#gridpanel .sep { height: 1px; background: var(--hair); margin: 7px 0; }
+
+/* ---------- look a · node CONTENT: one system for every node ----------
+   options (icon + word, the chosen one in sand, as on the view cube)
+   · value footer (what is set now), all at a readable size */
+.node .value, .node .pick-sub { display: none; }
+body.look-1 .node.tool { --nd-on: #d5cfc3; --nd-on-ink: #1d1c20; --nd-rule: #34333a; }
+body.look-1 .node.tool .value {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--nd-rule);
+  font-size: 10.5px; color: var(--nd-ink); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+body.look-1 .node.tool .value.tight { margin-top: 3px; padding-top: 0; border-top: 0; }
+body.look-1 .node.tool .value .k { color: var(--nd-soft); }
+body.look-1 .node.tool .value:not(:has(.k)) { justify-content: center; }
+body.look-1 .node.tool .pick-sub { display: block; text-align: center; margin: 6px 0 2px; font-size: 10.5px; color: var(--nd-ink); }
+/* screen / energy: their name becomes the value footer */
+body.look-1 .node.tool .pick-name { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--nd-rule); font-size: 10.5px; }
+
+/* chosen = sand, everywhere */
+body.look-1 .shp .forms { grid-template-columns: repeat(3, 1fr); gap: 4px; }
+body.look-1 .shp .forms button {
+  height: auto; padding: 7px 0 5px; display: grid; justify-items: center; gap: 4px; border-radius: 6px;
+  color: var(--nd-ink); background: var(--nd-cell); font: inherit; font-size: 10px;
+}
+body.look-1 .shp .forms button:hover { background: #38373d; color: #fff; }
+body.look-1 .shp .forms button.on { background: var(--nd-on); color: var(--nd-on-ink); }
+body.look-1 .shp .forms button.on svg { fill: none; }
+body.look-1 .shp .forms svg { width: 22px; height: 22px; stroke-width: 1.5; }
+body.look-1 .node.tool.shp { width: 196px; }
+
+body.look-1 .snp .snaps { grid-template-columns: repeat(4, 38px); gap: 4px; }
+body.look-1 .snp .snaps button { padding: 6px 0 5px; border-radius: 6px; background: var(--nd-cell); color: var(--nd-ink); font-size: 10px; }
+body.look-1 .snp .snaps button:hover { background: #38373d; color: #fff; }
+body.look-1 .snp .snaps button.on { background: var(--nd-on); color: var(--nd-on-ink); }
+body.look-1 .node.tool.snp .card { padding: 11px 9px 10px; }
+
+body.look-1 .spk .seg { display: flex; gap: 4px; justify-content: center; margin-top: 8px; }
+body.look-1 .spk .seg button { flex: 1; padding: 5px 0; border-radius: 6px; background: var(--nd-cell); color: var(--nd-ink); font-size: 10.5px; }
+body.look-1 .spk .seg button:hover { background: #38373d; color: #fff; }
+body.look-1 .spk .seg button.on { background: var(--nd-on); color: var(--nd-on-ink); }
+body.look-1 .node.tool.spk { width: 176px; }
+
+body.look-1 .vws .mode { gap: 4px; margin-top: 8px; }
+body.look-1 .vws .mode button { flex: 1; padding: 4px 8px; border-radius: 6px; background: var(--nd-cell); color: var(--nd-ink); font-size: 10.5px; }
+body.look-1 .vws .mode button.on { background: var(--nd-on); color: var(--nd-on-ink); }
+body.look-1 .vws .mode button:hover:not(.on) { background: #38373d; color: #fff; }
+
+body.look-1 .str .val { font-size: 10.5px; margin-top: 4px; }
+body.look-1 .node.tool .arrow { font-size: 18px; width: 22px; height: 28px; }
+body.look-1 .spk .seg button::before, body.look-1 .spk .seg button::after { content: none; }   /* sand marks the choice: no [brackets] */
+
+html.wheel-hover, html.wheel-hover * { cursor: ew-resize !important; }
+html.wheel-dragging, html.wheel-dragging * { cursor: ew-resize !important; }
+/* a node whose part is lit up (hover / click): its frame takes the part's colour */
+body.look-1 .node.tool.hl { --nd-frame: var(--hl); --nd-edge: var(--hl); }
+body.look-1 .node.tool.hl .ctl .grip { background-image: radial-gradient(circle, rgba(0, 0, 0, 0.45) 1.3px, transparent 1.6px); }
+body.look-1 .node.tool.hl .ctl .x { color: rgba(0, 0, 0, 0.55); }
+.node.tool { transition: background-color 160ms, border-color 160ms; }
+/* views node: a fixed width (the view's name below changes length and made it jump) */
+body.look-1 .node.tool.vws .card { width: 172px; }
+body.look-1 .vws .value .v { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* wheels node: the wheel to scale, a diameter slider, the size */
+.node.tool.whl .card { width: auto; padding: 9px 9px 8px; }
+.whl .wheel { display: block; width: 72px; height: 72px; margin: 0 auto 4px; color: var(--ink); }
+.whl .wheel .max { fill: none; stroke: currentColor; stroke-opacity: 0.25; stroke-dasharray: 2 3; }
+.whl .wheel .tyre { fill: currentColor; }
+.whl .wheel .rim { fill: none; stroke: var(--bg-center); stroke-width: 1.2; }
+.whl .wheel .hub { fill: var(--bg-center); }
+.whl .wheel .spokes { stroke: var(--bg-center); stroke-width: 1.4; stroke-linecap: round; }
+.whl input { display: block; width: 116px; margin: 0 auto; accent-color: var(--ink); }
+body.look-1 .whl .value { margin-top: 7px; padding-top: 6px; }
+body.look-1 .whl .value.tight { margin-top: 2px; padding-top: 0; }
+body.look-1 .whl .wheel { color: var(--nd-ink); }
+body.look-1 .whl .wheel .rim, body.look-1 .whl .wheel .spokes { stroke: var(--nd-body); }
+body.look-1 .whl .wheel .hub { fill: var(--nd-body); }
+body.look-1 .whl input { accent-color: var(--nd-on, #d5cfc3); }
+/* views node: the compass fills the card's width, centred (the view name below widens the card) */
+body.look-1 .vws .grid { grid-template-columns: repeat(3, 1fr); width: 100%; justify-items: stretch; gap: 3px; }
+body.look-1 .vws .grid button { width: auto; height: 30px; }
+
+/* cross page: the overall size as quiet dimension lines along the object's sides */
+#dims { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 2; pointer-events: none; overflow: visible; }
+#dims .ext { stroke: var(--ink-soft); stroke-width: 0.75; opacity: 0.45; fill: none; }
+#dims .dim { stroke: var(--ink-soft); stroke-width: 0.9; opacity: 0.7; fill: none; }
+#dims .lbl { font-size: 10px; letter-spacing: 0.04em; fill: var(--ink-soft); opacity: 0.85; font-variant-numeric: tabular-nums; }
+#dims-toggle {
+  position: fixed; top: 20px; left: 320px; z-index: 3;
+  font: inherit; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+#dims-toggle.on { color: var(--ink); }
+/* look b: the primitives stay icons only (the words under them are look a's) */
+body:not(.look-1) .shp .forms button span { display: none; }
+
+
+/* ---------- the cross page, tidied: one case (the speaker), no components list, no dimensions, one look;
+   the views in the middle of the top; view and angle snap as modifiers on the left; the right column packed ---------- */
+body[data-page="cross"] #casetoggle,
+body[data-page="cross"] #dims-toggle,
+body[data-page="cross"] .node.bom,
+body[data-page="cross"] #looks,
+body[data-page="cross"] .node.vws,
+body[data-page="cross"] .node.snp,
+body[data-page="cross"].mode-flathd2 #frostfollow { display: none !important; }
+body[data-page="cross"] #viewtoggle { left: 50%; right: auto; transform: translateX(-50%); }
+/* bigger view switch on the cross page */
+body[data-page="cross"] #viewtoggle { font-size: 12.5px; }
+body[data-page="cross"] #viewtoggle button { padding: 7px 19px; }
+body[data-page="cross"].view-compiling #viewtoggle::after { top: 40px; }
+#leftmods {
+  position: fixed; left: 20px; top: 50%; transform: translateY(-50%); z-index: 3;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+}
+#leftmods .lmod {
+  display: flex; align-items: center; gap: 1px; padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#leftmods .lbl { margin-right: 6px; }
+#leftmods .lsnap button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#leftmods .lsnap button:hover { color: var(--ink-strong); }
+#leftmods .lsnap button.on { color: var(--bg-center); background: var(--ink); }
+#leftmods .lviews { border-radius: 14px; padding: 6px 6px 6px 10px; align-items: flex-start; }
+#leftmods .lviews .lbl { margin-top: 5px; }
+#leftmods .vgrid { display: grid; grid-template-columns: repeat(3, 26px); gap: 2px; }
+#leftmods .vgrid button { width: 26px; height: 24px; padding: 0; display: grid; place-items: center; background: none; border: 0; border-radius: 6px; color: var(--ink-soft); cursor: pointer; }
+#leftmods .vgrid button:hover { color: var(--ink-strong); background: var(--hair); }
+#leftmods .vgrid button.on { color: var(--bg-center); background: var(--ink); }
+#leftmods .vgrid svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+#leftmods .vgrid svg .front { fill: currentColor; fill-opacity: 0.55; }
+#leftmods .vgrid svg .edge { stroke-width: 2.6; }
+/* the right column: one width, the label on the left, the controls on the right, a slider filling between */
+body[data-page="cross"] .rmod { min-width: 268px; box-sizing: border-box; justify-content: flex-end; }
+body[data-page="cross"] .rmod > .lbl:first-child { margin-right: auto !important; }
+body[data-page="cross"] .rmod input[type="range"] { flex: 1; width: auto; min-width: 60px; }
+/* the 'hide the controls' button: up in the free corner (the right column is packed under it) */
+body[data-page="cross"] #viewctl-toggle { top: 20px !important; bottom: auto !important; right: 20px !important; transform: none !important; }
+
+/* a view still being prepared: say so under the view switch (the last view stays until it is ready) */
+body.view-compiling #viewtoggle::after {
+  content: 'preparing ' attr(data-preparing) '…'; position: absolute; top: 34px; left: 50%; transform: translateX(-50%);
+  white-space: nowrap; font-size: 11px; color: var(--ink-soft); animation: view-prep 0.9s ease-in-out infinite alternate;
+}
+
+#densholecol { bottom: 140px; } #densscreencol { bottom: 141px; } #densknobcol { bottom: 142px; }
+body.mode-density .denscol { display: flex; }
+
+/* density, parts as outline: thickness and colour of the line (just under the parts' look) */
+.densoutl {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#denspartlw { bottom: 190px; } #denspartop { bottom: 189.5px; } #denspartcol { bottom: 189px; gap: 1px; padding: 3px 4px 3px 10px; }
+body.mode-density.dens-outline .densoutl { display: flex; }
+body.hide-viewctl .densoutl { display: none !important; }
+.densoutl input { width: 110px; accent-color: var(--ink); }
+#denspartcol .lbl { margin-right: 4px; }
+#denspartcol button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#denspartcol button.word.on { color: var(--bg-center); background: var(--ink); }
+#denspartcol button.sw { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); }
+#denspartcol button.sw.on { border-color: var(--ink); }
+/* the arrow hides the whole right column, whatever view or option shows a pill */
+body.hide-viewctl .rmod { display: none !important; }
+
+/* the arrow hides the whole right column, whatever view or option shows a pill */
+body.hide-viewctl .rmod { display: none !important; }
+
+/* flat hd 2: shade on / off · part lines broken / whole */
+#flatshade {
+  position: fixed; right: 20px; bottom: 104px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2 #flatshade { display: flex; }
+#flatshade .lbl { margin-right: 4px; }
+#flatshade .lbl.sep { margin-left: 10px; }
+#flatshade button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+#flatshade button:hover { color: var(--ink-strong); }
+#flatshade button.on { color: var(--bg-center); background: var(--ink); }
+
+/* the cross page: the prompt is a plain line of text at the bottom (the blocks are not shown) */
+body[data-page="cross"] #promptcells, body[data-page="cross"] #blockagain { display: none !important; }
+#promptline {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 3; max-width: 52vw;
+  padding: 6px 14px; font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px; pointer-events: none;
+}
+
+/* the cross page: the tool nodes as modifiers in the left column (light cards like view / angle snap) */
+body[data-page="cross"] #links { display: none !important; }
+body[data-page="cross"] #leftmods { top: 70px; bottom: 80px; transform: none; justify-content: safe center; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+body[data-page="cross"] #leftmods .node.tool {
+  position: static !important; left: auto !important; top: auto !important; right: auto !important; transform: none !important;
+  --nd-frame: transparent; --nd-edge: transparent; --nd-body: transparent; --nd-ink: var(--ink); --nd-soft: var(--ink-soft); --nd-cell: var(--hair);
+  background: var(--surface) !important; border: 1px solid var(--hair) !important; border-radius: 14px !important;
+  padding: 5px 8px 6px !important; box-shadow: none !important; width: 176px !important; box-sizing: border-box;
+}
+body[data-page="cross"] #leftmods .node.tool.hidden { display: none !important; }
+body[data-page="cross"] #leftmods .node .ctl { display: none !important; }
+body[data-page="cross"] #leftmods .node .hdr { height: auto !important; }
+body[data-page="cross"] #leftmods .node.tool .tab {
+  position: static !important; background: none !important; color: var(--ink-soft) !important; font-family: inherit !important;
+  font-weight: 400 !important; font-size: 11px !important; letter-spacing: 0 !important; text-transform: lowercase !important;
+  line-height: 1.5 !important; padding: 0 0 2px 2px !important; border-radius: 0 !important;
+}
+body[data-page="cross"] #leftmods .node.tool .tab::before, body[data-page="cross"] #leftmods .node.tool .tab::after { display: none !important; }
+body[data-page="cross"] #leftmods .node.tool .card { background: none !important; padding: 2px 0 0 !important; border: 0 !important; }
+body[data-page="cross"] #leftmods .node.tool.hl { box-shadow: inset 0 0 0 1px var(--hl, var(--ink)) !important; }
+/* (the nodes' buttons, as the modifiers': no fill, the chosen one dark) */
+body[data-page="cross"] #leftmods .node.tool .forms button, body[data-page="cross"] #leftmods .node.tool .seg button { background: none !important; color: var(--ink-soft) !important; border-radius: 8px; }
+body[data-page="cross"] #leftmods .node.tool .forms button:hover, body[data-page="cross"] #leftmods .node.tool .seg button:hover { color: var(--ink-strong) !important; }
+body[data-page="cross"] #leftmods .node.tool .forms button.on, body[data-page="cross"] #leftmods .node.tool .seg button.on { background: var(--ink) !important; color: var(--bg-center) !important; }
+body[data-page="cross"] #leftmods .node.tool .forms button.on svg { fill: none !important; }
+body[data-page="cross"] #leftmods .node.tool .value { border-color: var(--hair) !important; }
+
+/* the prompt line: which block is which — the root, the other features, the main feature */
+#promptline .pl-root { color: var(--ink-soft); }
+#promptline .pl-rest { color: #8a7f6e; }
+#promptline .pl-main { color: var(--ink-strong, #1f1e1c); font-weight: 600; }
+#promptline i { font-style: normal; color: var(--ink-soft); }
+
+/* the left modifiers, simpler: like 'view' — a small label on the left, small icons on the right, no names,
+   no boxes around the shapes, no read-outs */
+body[data-page="cross"] #leftmods .node.tool {
+  display: flex !important; align-items: flex-start; gap: 4px; width: auto !important; padding: 6px 6px 6px 10px !important;
+}
+body[data-page="cross"] #leftmods .node.tool .hdr { margin-top: 3px; }
+body[data-page="cross"] #leftmods .node.tool .tab { padding: 0 6px 0 0 !important; }
+body[data-page="cross"] #leftmods .node.tool .value,
+body[data-page="cross"] #leftmods .node.tool .pick-name,
+body[data-page="cross"] #leftmods .node.tool .forms span { display: none !important; }
+body[data-page="cross"] #leftmods .node.tool .card { padding: 0 !important; }
+body[data-page="cross"] #leftmods .shp .forms { grid-template-columns: repeat(3, 26px) !important; gap: 2px !important; }
+body[data-page="cross"] #leftmods .shp .forms button { width: 26px; height: 24px !important; border-radius: 6px !important; padding: 0 !important; }
+body[data-page="cross"] #leftmods .shp .forms svg { width: 16px !important; height: 16px !important; stroke-width: 1.3 !important; }
+body[data-page="cross"] #leftmods .node.tool .picker { grid-template-columns: 12px 44px 12px !important; gap: 2px; }
+body[data-page="cross"] #leftmods .node.tool .viz svg { width: 44px; height: 33px; display: block; }
+body[data-page="cross"] #leftmods .node.tool .arrow { font-size: 13px; padding: 0; }
+body[data-page="cross"] #leftmods .spk .card { display: flex; align-items: center; gap: 6px; }
+body[data-page="cross"] #leftmods .spk .seg.types { margin-top: 0 !important; display: flex; gap: 2px; }
+body[data-page="cross"] #leftmods .spk .seg.types button { padding: 3px 7px !important; font-size: 11px; border-radius: 999px !important; }
+/* (clearer: the root light, every block dark with a dotted line under it, the main one bold) */
+#promptline .pl-root { color: #a29e96; }
+#promptline .pl-rest { color: var(--ink); border-bottom: 1px dotted #a29e96; }
+#promptline .pl-main { border-bottom: 1px dotted var(--ink); }
+
+/* the prompt: every feature alike (the main one too) */
+#promptline .pl-main { color: var(--ink); font-weight: 400; border-bottom: 1px dotted #a29e96; }
+
+/* the left modifiers: the screen and the speaker centred between their arrows */
+body[data-page="cross"] #leftmods .node.tool .picker { display: grid !important; grid-template-columns: 14px 44px 14px !important; align-items: center; justify-items: center; }
+body[data-page="cross"] #leftmods .node.tool .viz { padding: 0 !important; margin: 0 !important; width: 44px; display: grid; place-items: center; }
+body[data-page="cross"] #leftmods .node.tool .viz svg { width: 40px !important; height: 30px !important; margin: 0 !important; }
+body[data-page="cross"] #leftmods .node.tool .arrow { width: 14px; text-align: center; }
+
+/* a white swatch shows its edge */
+button.sw[style*="#ffffff"] { box-shadow: inset 0 0 0 1px var(--hair); }
+
+/* flat hd 2: the parts' fill / outline and their lines broken / whole, each a pill (grouped with the parts) */
+.flatpill {
+  position: fixed; right: 20px; bottom: 100px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body.mode-flathd2 .flatpill { display: flex; }
+.flatpill .lbl { margin-right: 4px; }
+.flatpill button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+.flatpill button:hover { color: var(--ink-strong); }
+.flatpill button.on { color: var(--bg-center); background: var(--ink); }
+
+/* the prompt: no underlines */
+#promptline .pl-rest, #promptline .pl-main { border-bottom: 0 !important; text-decoration: none !important; }
+/* 'hide' hides only the right column: the prompt and the left modifiers stay */
+
+/* the cross page: minimal sliders — a thin line and a small circle */
+body[data-page="cross"] input[type="range"] {
+  -webkit-appearance: none; appearance: none; height: 14px; background: transparent; margin: 0 4px; cursor: pointer;
+}
+body[data-page="cross"] input[type="range"]::-webkit-slider-runnable-track { height: 1px; background: var(--ink-soft); border: 0; }
+body[data-page="cross"] input[type="range"]::-moz-range-track { height: 1px; background: var(--ink-soft); border: 0; }
+body[data-page="cross"] input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 9px; height: 9px; margin-top: -4px; border-radius: 50%;
+  background: var(--ink); border: 0;
+}
+body[data-page="cross"] input[type="range"]::-moz-range-thumb { width: 9px; height: 9px; border-radius: 50%; background: var(--ink); border: 0; }
+body[data-page="cross"] input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.2); }
+body[data-page="cross"] input[type="range"]:focus { outline: none; }
+
+/* density: no transition options (it is always 'free', subtly) */
+body[data-page="cross"].mode-density #denstrans { display: none !important; }
+
+/* pegboard: the body's brightness */
+#crossbright {
+  position: fixed; right: 20px; bottom: 900px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+body[data-page="cross"].mode-cross #crossbright { display: flex; }
+#crossbright input { width: 110px; }
+/* pegboard: knob · screen · holes colours (real, or a swatch) */
+.crosscol, .denscol, .napcol {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#crosspage { bottom: 905px; } #crossholecol { bottom: 910px; } #crossscreencol { bottom: 920px; } #crossknobcol { bottom: 930px; }
+body[data-page="cross"].mode-cross .crosscol { display: flex; }
+.crosscol .lbl, .denscol .lbl, .napcol .lbl { margin-right: 4px; }
+.crosscol button, .denscol button, .napcol button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+.crosscol button.word.on, .denscol button.word.on, .napcol button.word.on { color: var(--bg-center); background: var(--ink); }
+.crosscol button.sw, .denscol button.sw, .napcol button.sw { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); }
+.crosscol button.sw.on, .denscol button.sw.on, .napcol button.sw.on { border-color: var(--ink); }
+
+/* the cross page: no hide arrow top right — a small 'drag to rotate' instead (all three views) */
+body[data-page="cross"] #viewctl-toggle { display: none !important; }
+#draghint {
+  position: fixed; top: 26px; right: 22px; z-index: 3; font-size: 11px; color: var(--ink-soft); pointer-events: none;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+/* the cross page: no 'tools' box top left, no 'drag to rotate' */
+body[data-page="cross"] #tools-toggle, #draghint { display: none !important; }
+
+/* hover a modifier: what it does, in a small box top right */
+#modtip {
+  position: fixed; right: 20px; top: 20px; z-index: 20; max-width: 268px; padding: 6px 10px; pointer-events: none;
+  font-size: 11px; line-height: 1.4; color: var(--ink); background: var(--surface); border: 1px solid var(--hair);
+  border-radius: 8px; box-shadow: 0 4px 14px rgba(40, 36, 30, 0.08); opacity: 0; transition: opacity 0.15s;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+#modtip.on { opacity: 1; }
+/* …as plain text, no box */
+#modtip { background: none; border: 0; box-shadow: none; padding: 0; text-align: right; color: var(--ink-soft); }
+/* the cross page: no log (bottom left) */
+body[data-page="cross"] #toolbox { display: none !important; }
+
+/* the view modifier: a map from above — the object in the middle, the camera's eight places around it */
+#leftmods .vwrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+#leftmods .vgrid svg path { stroke-linecap: round; stroke-linejoin: round; }
+#leftmods .vgrid button[data-i="4"] svg { width: 18px; height: 18px; }
+#leftmods .vname { font-size: 10px; color: var(--ink-soft); white-space: nowrap; }
+
+/* the prompt: no box, just the sentence — with a blinking caret after it, as if you could still type */
+#promptline { background: none !important; border: 0 !important; }
+#promptline::after {
+  content: ''; display: inline-block; width: 1px; height: 1.15em; margin-left: 3px; vertical-align: -0.2em;
+  background: var(--ink); animation: pl-caret 1.06s steps(1) infinite;
+}
+@keyframes pl-caret { 50% { opacity: 0; } }
+
+/* the page: one flat warm grey (cross page) */
+body[data-page="cross"] { background: #efeeeb !important; }
+body[data-page="cross"] { user-select: none; -webkit-user-select: none; }   /* (no stray selection to drag instead of turning) */
+
+/* density: the outside solid / outline, and its outlines' own frost */
+.dpill { display: none !important; }
+body[data-page="cross"].mode-density .dpill { display: flex !important; }
+.dslider {
+  position: fixed; right: 20px; bottom: 60px; z-index: 3; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+.dslider input { width: 110px; }
+body[data-page="cross"].mode-density.dens-outoutl #densfrostout { display: flex; }
