@@ -1,11 +1,11 @@
-import { CONFIG, NODE_PALETTE } from '../config.js?v=202610091041';
-import { state, params } from '../state.js?v=202610091041';
-import { view } from '../view.js?v=202610091041';
-import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js?v=202610091041';
-import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js?v=202610091041';
-import { SCREENS } from '../config.js?v=202610091041';
-import { refImageURL, REF_LABELS } from './refimages.js?v=202610091041';
-import { playVoice } from './sound.js?v=202610091041';
+import { CONFIG, NODE_PALETTE } from '../config.js?v=202610091312';
+import { state, params } from '../state.js?v=202610091312';
+import { view } from '../view.js?v=202610091312';
+import { SPEAKER_PATTERNS, holePattern } from '../speaker-patterns.js?v=202610091312';
+import { setSpeakerPattern, setScreenType, setPower, setSpeakerLib } from '../state.js?v=202610091312';
+import { SCREENS } from '../config.js?v=202610091312';
+import { refImageURL, REF_LABELS } from './refimages.js?v=202610091312';
+import { playVoice } from './sound.js?v=202610091312';
 
 const NS = 'http://www.w3.org/2000/svg';
 const easeOut = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);

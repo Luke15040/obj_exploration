@@ -1,4 +1,4 @@
-import { view } from '../view.js?v=202610091041';
+import { view } from '../view.js?v=202610091312';
 
 /**
  * The particles view's frame (ref: a framed dot grid): a box around the object,

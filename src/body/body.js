@@ -1,14 +1,14 @@
-import { CONFIG, NODE_PALETTE, CROSS_PALETTE } from '../config.js?v=202610091041';
-import { state, params } from '../state.js?v=202610091041';
-import { view } from '../view.js?v=202610091041';
-import { Spring } from './springs.js?v=202610091041';
-import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, flatBlurShader, gradientShader, markerShader, densityShader, densPartsShader, densPartsRealShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610091041';
-import { gbufferShader, edgeShader } from './blockshaders.js?v=202610091041';
-import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610091041';
-import { traceStrokes } from './strokes.js?v=202610091041';
-import { generateBlueNoise } from './bluenoise.js?v=202610091041';
-import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610091041';
-import { holePattern } from '../speaker-patterns.js?v=202610091041';
+import { CONFIG, NODE_PALETTE, CROSS_PALETTE } from '../config.js?v=202610091312';
+import { state, params } from '../state.js?v=202610091312';
+import { view } from '../view.js?v=202610091312';
+import { Spring } from './springs.js?v=202610091312';
+import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, flatBlurShader, gradientShader, markerShader, densityShader, densPartsShader, densPartsRealShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610091312';
+import { gbufferShader, edgeShader } from './blockshaders.js?v=202610091312';
+import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610091312';
+import { traceStrokes } from './strokes.js?v=202610091312';
+import { generateBlueNoise } from './bluenoise.js?v=202610091312';
+import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610091312';
+import { holePattern } from '../speaker-patterns.js?v=202610091312';
 
 const METHODS = { bayer: 0, blue: 1, split: 2 };
 
@@ -892,6 +892,7 @@ export function createBody(canvas) {
     gl.uniform1f(u.uOutT, animate ? params.outT || 0 : 0);   // flat hd 2: the drag began, the contour un-draws
     gl.uniform1f(u.uGuide, animate ? flatGuide : 0);   // …and turns into a pencil line (eased: the outline leaves smoothly)
     gl.uniform1f(u.uGuideW, pxr());
+    gl.uniform1f(u.uGuideLine, !animate ? 1 : params.flatGuideLine === false ? 0 : params.flatGuideGaps === false ? 2 : 1);   // (the 'turning line' pill)
     gl.uniform1f(u.uInsideA, animate ? params.flatInside ?? 1 : 1);
     gl.uniform1f(u.uOutsideA, animate ? params.flatOutside ?? 1 : 1);
     bindTex(0, gtarget.tex, u.uG);

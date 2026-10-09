@@ -1,5 +1,5 @@
-import { speakerHolesGLSL } from './glsl-speaker.js?v=202610091041';
-import { partsGLSL } from './glsl-parts.js?v=202610091041';
+import { speakerHolesGLSL } from './glsl-speaker.js?v=202610091312';
+import { partsGLSL } from './glsl-parts.js?v=202610091312';
 
 /**
  * Body shaders (GLSL ES 3.00 / WebGL2).
@@ -680,6 +680,7 @@ uniform float uAnim;            // 1 = flat hd 2: after a view change the contou
 uniform float uOutT;            // flat hd 2: a drag began — the contour un-draws along the same pen path (0 = all there)
 uniform float uGuide;           // flat hd 2: 0 at rest · 1 while it turns — the shape as a shaky warm-grey pencil line (eased from outside: no cuts)
 uniform float uGuideW;          // device px per css px (the shake's size)
+uniform float uGuideLine;       // flat hd 2: the warm-grey pencil while it turns — 0 off · 1 with gaps · 2 whole
 uniform float uUnfinished;      // flat hd 2: 1 = the drawing left unfinished (gaps in the lines, on the shape)
 uniform float uLineGrey;        // flat hd 2: 1 = the lines in grey pencil (not the coloured crayons)
 uniform float uPartsLine;       // flat hd 2: 1 = the parts drawn as outlines too (no fill), in the same pencil
@@ -949,10 +950,10 @@ void main() {
       // under it, the grey pencil: a part of the shape (patches that stick to it as it turns),
       // while it turns and wherever the colour isn't (yet / any more)
       // a thin, sketchy line: pencil grain along it, a few breaks, as if it were being drawn again
-      float patchy = smoothstep(0.3, 0.55, noise3(pe * 0.045 + vec3(0.0, 0.0, uTime * 0.15)));   // (in pieces, its gaps drift)
+      float patchy = uGuideLine > 1.5 ? 1.0 : smoothstep(0.3, 0.55, noise3(pe * 0.045 + vec3(0.0, 0.0, uTime * 0.15)));   // (in pieces, its gaps drift)
       // (its grain and breaks sit on the shape, not on the screen: they travel with it instead of flickering)
-      float gd = min(1.0, edge * 1.4) * 0.55 * patchy * (1.0 - cl) * (0.3 + 0.7 * hash(floor(pe.xy * 1.6) + floor(pe.z * 1.6) * 13.7)) * step(0.2, hash(floor(pe.xy * 0.9) + floor(pe.z * 0.9) * 7.3 + 5.0));   // (light, loose: a hint of the shape)
-      gd *= hitS ? 0.0 : 1.0;   // (the outline only: no shadows while it turns)
+      float gd = min(1.0, edge * 1.4) * 0.55 * patchy * (1.0 - cl) * (0.3 + 0.7 * hash(floor(pe.xy * 1.6) + floor(pe.z * 1.6) * 13.7)) * max(step(1.5, uGuideLine), step(0.2, hash(floor(pe.xy * 0.9) + floor(pe.z * 0.9) * 7.3 + 5.0)));   // (light, loose: a hint of the shape)
+      gd *= hitS ? 0.0 : min(uGuideLine, 1.0);   // (the outline only: no shadows while it turns · off with the 'turning line' pill)
       col = col * (1.0 - gd) + vec4(vec3(0.53, 0.5, 0.46), 1.0) * gd;   // a warm grey (look a)
       edge *= cl * (hitS || knob ? 1.0 : unf);   // (the shadows and the knobs: whole, not cut into the unfinished strokes)
     }
@@ -960,14 +961,14 @@ void main() {
   }
   // flat hd 2 while it turns: the warm-grey pencil goes over the outline again — two more strokes just off it,
   // broken, wobbling slowly so they cross it now and then, like a hand sketching the shape as it turns
-  if (uAnim > 0.5 && !hitS && uGuide > 0.01) {
+  if (uAnim > 0.5 && !hitS && uGuide > 0.01 && uGuideLine > 0.5) {
     float gx = 0.0;
     float wv = noise3(pe * 0.035 + vec3(0.0, 0.0, uTime * 0.3)), br = noise3(pe * 0.05 + vec3(3.3, 7.0, uTime * 0.25));
     for (int k = 1; k <= 2; k++) {
       float fk = float(k);
       float off = (0.4 + 2.4 * (fk < 1.5 ? wv : 1.0 - wv)) * fk * uGuideW * fp;
       float r = 1.0 - smoothstep(w * 0.15, w * 1.0, abs(minD - off));   // (soft-edged)
-      r *= step(0.5, (fk < 1.5 ? br : 1.0 - br));   // broken strokes
+      if (uGuideLine < 1.5) r *= step(0.5, (fk < 1.5 ? br : 1.0 - br));   // broken strokes (whole: no gaps)
       gx = max(gx, r * (0.45 - 0.12 * fk));   // (faint)
     }
     gx *= uGuide * (0.55 + 0.45 * hash(floor(pe.xy * 1.6) + floor(pe.z * 1.6) * 13.7));

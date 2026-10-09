@@ -1,5 +1,5 @@
-import { CONFIG, SCREENS } from './config.js?v=202610091041';
-import { layoutParts, LIBRARY, CABLES, minHalfTrack } from './parts.js?v=202610091041';
+import { CONFIG, SCREENS } from './config.js?v=202610091312';
+import { layoutParts, LIBRARY, CABLES, minHalfTrack } from './parts.js?v=202610091312';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -108,6 +108,8 @@ export const params = {
   densOutLook: 'solid', // density: the outside (knob caps, holes, the screen) — 'solid' as it is, or 'outline'
   densFrostOut: 0,      // density: how frosted the outside's outlines are (apart from the inside's frost)
   flatTone: 'grey',     // flat hd 2 (cross page): the parts in 'grey', 'orange' · 'aqua' · 'olive' · 'taupe' (one scale), or 'colour'
+  flatGuideLine: true,  // flat hd 2: the warm-grey pencil line while it turns (the transition outline)
+  flatGuideGaps: true,  // …with gaps (broken) or whole
   flatShade: true,      // flat hd 2: the shade on faces seen edge-on (axonometric views)
   flatPartsBroken: true, // flat hd 2: the parts' outlines broken like the drawing (or whole)
   flatLineW: 1,         // flat hd 2: the line's weight (thin 0.3 … 2.5 thick)

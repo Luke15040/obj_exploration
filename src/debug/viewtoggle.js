@@ -1,6 +1,6 @@
-import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610091041';
-import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610091041';
-import { params } from '../state.js?v=202610091041';
+import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610091312';
+import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610091312';
+import { params } from '../state.js?v=202610091312';
 
 // three pages: the main one, lab.html with every particle / dither experiment, cross.html with only the cross view
 const LAB = document.body.dataset.page === 'lab';
@@ -574,6 +574,19 @@ export function createViewToggle({ orbit } = {}) {
       markFsh();
     });
     document.body.appendChild(fsh);
+    // …the warm-grey pencil line while it turns (the transition outline) on / off
+    const fgl = document.createElement('div');
+    fgl.id = 'flatguide';
+    fgl.className = 'flatpill';
+    fgl.innerHTML = '<span class="lbl">turning line</span><button data-fgl="off">off</button><button data-fgl="gaps">gaps</button><button data-fgl="whole">whole</button>';
+    const fglNow = () => (params.flatGuideLine === false ? 'off' : params.flatGuideGaps === false ? 'whole' : 'gaps');
+    const markFgl = () => fgl.querySelectorAll('[data-fgl]').forEach((b) => b.classList.toggle('on', b.dataset.fgl === fglNow()));
+    fgl.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-fgl]');
+      if (b) { params.flatGuideLine = b.dataset.fgl !== 'off'; if (b.dataset.fgl !== 'off') params.flatGuideGaps = b.dataset.fgl === 'gaps'; markFgl(); }
+    });
+    markFgl();
+    document.body.appendChild(fgl);
     // …and a fill on the shape's surfaces, in the outline's colour: how see-through
     const ff = document.createElement('div');
     ff.id = 'flatfill';
@@ -722,7 +735,7 @@ export function createViewToggle({ orbit } = {}) {
       // the parts and everything about their outline together
       const ORDER = params.view === 'density' ? ['densedge', 'densgrain', 'densstyle', 'denspal', 'densglow', 'densmotion', 'densdiverge', 'denssoft',
         'denstrans', 'frost', 'densalpha', 'insideop', 'outsideop', 'densoutlook', 'densoutcol', 'densfrostout', 'densparts', 'denslines', 'denspartlw', 'denspartop', 'denspartcol', 'snapstyle']
-        : params.view === 'flathd2' ? ['flatlines', 'flatthin', 'flatfill', 'flatshade',
+        : params.view === 'flathd2' ? ['flatlines', 'flatthin', 'flatfill', 'flatshade', 'flatguide',
           'unfinished', 'unfgaps', 'unftwice', 'unfhand', 'unfspeed', 'flatalive',
           'flatpartsmode', 'flatpartlines', 'flattone', 'frost', 'insideop',
           'outsideop', 'flatoutcol', 'snapstyle'] : null;
@@ -773,6 +786,7 @@ export function createViewToggle({ orbit } = {}) {
       flatthin: 'How thick the drawn lines are.',
       flatfill: 'A see-through fill on the body’s surfaces, in the line colour.',
       flatshade: 'The shading on faces seen almost edge-on.',
+      flatguide: 'The grey pencil outline drawn while the object turns: off, with gaps, or whole.',
       unfinished: 'Leaves the drawing finished, or unfinished with missing strokes.',
       unfgaps: 'How many strokes are missing from the drawing.',
       unftwice: 'How many strokes are gone over a second time.',
