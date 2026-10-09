@@ -1041,18 +1041,8 @@ body.hide-viewctl #flatlines { display: none; }
 #flattone { bottom: 228px; gap: 1px; padding: 3px 4px 3px 10px; }
 #flatthin { bottom: 192px; }
 #flatfill { bottom: 156px; }
-#flatoutcol {
-  position: fixed; right: 20px; bottom: 120px; z-index: 3; display: none; align-items: center; gap: 1px;
-  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
-  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
-}
-body.mode-flathd2 #flatoutcol { display: flex; }
-body.hide-viewctl #flatoutcol { display: none; }
-#flatoutcol .lbl { margin-right: 4px; }
-#flatoutcol button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
-#flatoutcol button.word.on { color: var(--bg-center); background: var(--ink); }
-#flatoutcol button.sw { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); }
-#flatoutcol button.sw.on { border-color: var(--ink); }
+#flatholecol { bottom: 120px; } #flatscreencol { bottom: 121px; } #flatknobcol { bottom: 122px; }
+body.mode-flathd2 .napcol { display: flex; }
 body.mode-flathd2 #flattone, body.mode-flathd2 #flatthin, body.mode-flathd2 #flatfill { display: flex; }
 body.hide-viewctl #flattone, body.hide-viewctl #flatthin, body.hide-viewctl #flatfill { display: none; }
 #flattone .lbl { margin-right: 4px; }
@@ -1423,19 +1413,8 @@ body.view-compiling #viewtoggle::after {
   white-space: nowrap; font-size: 11px; color: var(--ink-soft); animation: view-prep 0.9s ease-in-out infinite alternate;
 }
 
-/* density: the outside's colour (real, or a swatch) */
-#densoutcol {
-  position: fixed; right: 20px; bottom: 140px; z-index: 3; display: none; align-items: center; gap: 1px;
-  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
-  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
-}
-body.mode-density #densoutcol { display: flex; }
-body.hide-viewctl #densoutcol { display: none !important; }
-#densoutcol .lbl { margin-right: 4px; }
-#densoutcol button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
-#densoutcol button.word.on { color: var(--bg-center); background: var(--ink); }
-#densoutcol button.sw { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); }
-#densoutcol button.sw.on { border-color: var(--ink); }
+#densholecol { bottom: 140px; } #densscreencol { bottom: 141px; } #densknobcol { bottom: 142px; }
+body.mode-density .denscol { display: flex; }
 
 /* density, parts as outline: thickness and colour of the line (just under the parts' look) */
 .densoutl {
@@ -1591,6 +1570,19 @@ body[data-page="cross"].mode-density #denstrans { display: none !important; }
 }
 body[data-page="cross"].mode-cross #crossbright { display: flex; }
 #crossbright input { width: 110px; }
+/* pegboard: knob · screen · holes colours (real, or a swatch) */
+.crosscol, .denscol, .napcol {
+  position: fixed; right: 20px; z-index: 3; display: none; align-items: center; gap: 1px;
+  padding: 3px 4px 3px 10px; font-size: 11px; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 999px;
+}
+#crosspage { bottom: 905px; } #crossholecol { bottom: 910px; } #crossscreencol { bottom: 920px; } #crossknobcol { bottom: 930px; }
+body[data-page="cross"].mode-cross .crosscol { display: flex; }
+.crosscol .lbl, .denscol .lbl, .napcol .lbl { margin-right: 4px; }
+.crosscol button, .denscol button, .napcol button { font: inherit; padding: 3px 8px; background: none; border: 0; border-radius: 999px; color: var(--ink-soft); cursor: pointer; }
+.crosscol button.word.on, .denscol button.word.on, .napcol button.word.on { color: var(--bg-center); background: var(--ink); }
+.crosscol button.sw, .denscol button.sw, .napcol button.sw { width: 16px; height: 16px; margin: 0 2px; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--sw); }
+.crosscol button.sw.on, .denscol button.sw.on, .napcol button.sw.on { border-color: var(--ink); }
 
 /* the cross page: no hide arrow top right — a small 'drag to rotate' instead (all three views) */
 body[data-page="cross"] #viewctl-toggle { display: none !important; }
@@ -1630,7 +1622,7 @@ body[data-page="cross"] #toolbox { display: none !important; }
 @keyframes pl-caret { 50% { opacity: 0; } }
 
 /* the page: one flat warm grey (cross page) */
-body[data-page="cross"] { background: #f3f2ef !important; }
+body[data-page="cross"] { background: #efeeeb !important; }
 
 /* density: the outside solid / outline, and its outlines' own frost */
 .dpill { display: none !important; }

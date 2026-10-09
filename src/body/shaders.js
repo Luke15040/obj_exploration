@@ -1,5 +1,5 @@
-import { speakerHolesGLSL } from './glsl-speaker.js?v=202610091312';
-import { partsGLSL } from './glsl-parts.js?v=202610091312';
+import { speakerHolesGLSL } from './glsl-speaker.js?v=202610091549';
+import { partsGLSL } from './glsl-parts.js?v=202610091549';
 
 /**
  * Body shaders (GLSL ES 3.00 / WebGL2).
@@ -699,7 +699,8 @@ uniform sampler2D uStroke;      // when the pen passes each spot (strokes.js)
 uniform float uStrokeK;
 uniform sampler2D uG;           // flat hd 2: flat g-buffer with face classes (the corners)
 uniform float uLineW;
-uniform vec3  uOutsideCol;      // flat hd 2: the outside's colour (screen, knob caps, speaker holes) — the outline's, or another
+uniform vec3  uOutsideCol;      // flat hd 2: the knob caps' colour (the outside) — the outline's, or another
+uniform vec3  uOutScreenCol, uOutHoleCol;   // …the screen's and the speaker holes' (each its own)
 uniform vec3  uOutline;         // the drawing's colour: the outline and everything outside (flat hd 2: chosen; else red)
 uniform float uSkinFill;        // flat hd 2: a see-through fill on the shape's surfaces, in the outline's colour (0 = none)
 uniform float uShade;           // flat hd 2: 1 = the shade on faces seen almost edge-on (axonometric views) · 0 = none
@@ -856,7 +857,7 @@ void main() {
       if (uAnim > 0.5 && (uPartType[idx] == 6 || uPartType[idx] == 11)) {
         vec3 qs = transpose(uPartR[idx]) * (ro + rd * tp - uPartC[idx]);
         outside = screenOnFace(qs, uPartType[idx]);
-        fill = screenFace(qs, uPartType[idx], outside ? lineInk(uOutsideCol) : fill, outside);   // (outside: in the outline's colour, like all the outside)
+        fill = screenFace(qs, uPartType[idx], outside ? lineInk(uOutScreenCol) : fill, outside);   // (outside: in the outline's colour, like all the outside)
       }
     }
     float a = isCable ? mix(1.0, 0.75 + 0.25 * grain(px * 0.7), uSketch) : 1.0;
@@ -891,7 +892,7 @@ void main() {
     }
     float drawnK = drawnAt(penT(px));   // (it draws in, and leaves, with the rest)
     float fa = cap || sk0 == 5.0 ? 0.28 * uOutsideA * drawnK * undraw(px) : 0.0;
-    col = col * (1.0 - fa) + vec4(lineInk(uOutsideCol) * fa, fa);
+    col = col * (1.0 - fa) + vec4(lineInk(cap ? uOutsideCol : uOutHoleCol) * fa, fa);
     float ra = rim ? uOutsideA * drawnK * undraw(px) * min(1.0, uThin) : 0.0;
     col = col * (1.0 - ra) + vec4(lineInk(uOutsideCol) * ra, ra);
   }
@@ -1021,7 +1022,7 @@ void main() {
     if (hole) {
       float ts = uDrawT < 1.0 ? texelFetch(uStroke, clamp(ivec2(px * uStrokeK), ivec2(0), textureSize(uStroke, 0) - 1), 0).r : 0.0;
       float a = drawnAt(ts) * mix(1.0, 0.6 + 0.4 * grain(px * 1.3), uSketch) * undraw(px) * uOutsideA;
-      col = mix(col, vec4(lineInk(uOutsideCol), 1.0), a * 0.85 * min(1.0, uThin));
+      col = mix(col, vec4(lineInk(uOutHoleCol), 1.0), a * 0.85 * min(1.0, uThin));
     }
   }
   // flat hd 2, parts as outlines: where one part (or a cable) meets another or the background, the same
@@ -2811,6 +2812,7 @@ uniform sampler2D uPrev;     // pass 0: last frame's field · pass 1: this frame
 uniform float uK;            // pass 0: how much of the new field goes in this frame (1 = no memory)
 uniform int   uStyle;        // 0 = bands (contour map) · 1 = a soft ball: one smooth gradient, a soft edge · 2 = grainy (stippled, like risograph / airbrush grain)
 uniform float uInsideA;      // the parts inside, seen through the ball (0 = hidden in it)
+uniform float uPartsCrisp;   // 1 = the parts layer unblurred and less veiled (outlines in each part's colour)
 uniform vec3  uTypeColor[13]; // the parts' colours (one per kind)
 uniform float uFrost;         // the frost slider: the parts inside, blurred as through frosted glass
 uniform float uOutsideA;     // the outside on top, crisp: knob caps, speaker holes, the screen's face
@@ -2819,8 +2821,7 @@ uniform sampler2D uParts;    // pass 1: the parts layer (pass 2 draws it, only w
 uniform float uShapeA;       // how solid the shape is (0 = clear … 1 = as it was)
 uniform vec2  uHover;        // the cursor, device px
 uniform float uHoverAmt;     // 0 … 1: the cursor over the page (eased) — the shape swells gently toward it
-uniform vec3  uDOut;         // the outside's colour (knob caps, speaker holes, the screen), when tinted
-uniform float uDOutTint;     // 0 = the outside as it is (real) · 1 = in uDOut
+uniform vec4  uDKnob, uDScreen, uDHole;   // the outside's colours: knob caps · the screen · speaker holes (a = 0: as it is, 1: in rgb)
 uniform vec3  uHiCol;        // the hovered node's colour (its part lights up in it), 0 = none
 float unpackD(vec4 t) { return t.r + t.g / 255.0; }
 // grainy: a well-mixed integer hash (the float one streaks at this density)
@@ -3045,7 +3046,7 @@ void drawMain(vec2 px) {
       ivec2 lp = textureSize(uP, 0) - 1;
       vec4 pc = vec4(0.0);
       float fr = uFrost * uSigma * 0.28;
-      int taps = fr > 1.0 ? 20 : 1;
+      int taps = fr > 1.0 && uPartsCrisp < 0.5 ? 20 : 1;   // (coloured outlines: crisp, the frost would wash them out)
       for (int k = 0; k < 20; k++) {
         if (k >= taps) break;
         float a = float(k) * 2.39996, rr = fr * sqrt((float(k) + 0.5) / 20.0);
@@ -3054,8 +3055,8 @@ void drawMain(vec2 px) {
       }
       pc /= float(taps);
       pc.rgb = pc.a > 0.0 ? pc.rgb / pc.a : vec3(0.0);
-      pc.a *= 1.0 - uFrost * 0.2;                                   // frosted: a little more veiled too
-      float pa = pc.a * uInsideA;
+      pc.a *= 1.0 - uFrost * 0.2 * (1.0 - uPartsCrisp);              // frosted: a little more veiled too
+      float pa = pc.a * mix(uInsideA, 1.0, uPartsCrisp * 0.7);
       if (dot(uHiCol, vec3(1.0)) > 0.0 && distance(pc.rgb, uHiCol) < 0.06) pa = pc.a;   // (a node hovered: its part lit, not veiled)
       if (pa > 0.0) pm = vec4(pm.rgb * (1.0 - 0.7 * pa), pm.a * (1.0 - 0.7 * pa)) + vec4(pc.rgb * pa, pa) * (1.0 - pm.a * (1.0 - 0.7 * pa));
     }
@@ -3080,10 +3081,10 @@ void drawMain(vec2 px) {
           float e1, e2, e3, e4;
           vec3 n = normalize(vec3(1, -1, -1) * extrasSDF(p + vec3(0.3, -0.3, -0.3), e1) + vec3(-1, -1, 1) * extrasSDF(p + vec3(-0.3, -0.3, 0.3), e2)
                            + vec3(-1, 1, -1) * extrasSDF(p + vec3(-0.3, 0.3, -0.3), e3) + vec3(1, 1, 1) * extrasSDF(p + vec3(0.3, 0.3, 0.3), e4));
-          vec3 c = mix(vec3(0.34, 0.34, 0.36), uDOut, uDOutTint) * (0.62 + 0.55 * max(dot(n, L), 0.0) + 0.12 * max(n.y, 0.0));   // (or in the chosen colour)
+          vec3 c = mix(vec3(0.34, 0.34, 0.36), uDKnob.rgb, uDKnob.a) * (0.62 + 0.55 * max(dot(n, L), 0.0) + 0.12 * max(n.y, 0.0));   // (or in the chosen colour)
           oc4 = vec4(c + vec3(0.1) * pow(max(dot(reflect(-L, n), -rd), 0.0), 12.0), 1.0);
         } else if (speakerHoles(p) < 0.4) {
-          oc4 = vec4(mix(vec3(0.36, 0.35, 0.37), uDOut * 0.9, uDOutTint), 0.85);   // a speaker hole
+          oc4 = vec4(mix(vec3(0.36, 0.35, 0.37), uDHole.rgb * 0.9, uDHole.a), 0.85);   // a speaker hole
         } else {
           // the screen: found from the parts' boxes alone (no part models here: they cost the compiler a lot)
           int idx = -1;
@@ -3100,13 +3101,13 @@ void drawMain(vec2 px) {
               vec2 cell = clamp(floor((q.xy + vec2(19.5, 13.5)) / 3.0), vec2(0.0), vec2(12.0, 8.0));
               vec2 cc = q.xy - (cell * 3.0 - vec2(18.0, 12.0));
               bool led = max(abs(cc.x), abs(cc.y)) < 1.15;
-              vec3 lit = mix(vec3(0.96), mix(uDOut, vec3(1.0), 0.7), uDOutTint), unlit = mix(vec3(0.3, 0.3, 0.32), uDOut * 0.75, uDOutTint), field = mix(vec3(0.2, 0.2, 0.21), uDOut * 0.55, uDOutTint);
+              vec3 lit = mix(vec3(0.96), mix(uDScreen.rgb, vec3(1.0), 0.7), uDScreen.a), unlit = mix(vec3(0.3, 0.3, 0.32), uDScreen.rgb * 0.75, uDScreen.a), field = mix(vec3(0.2, 0.2, 0.21), uDScreen.rgb * 0.55, uDScreen.a);
               oc4 = vec4(led ? (litLED(vec2(cell.x, 8.0 - cell.y)) > 0.5 ? lit : unlit) : field, 1.0);
             } else if (uPartType[idx] == 11 && abs(q.x) < 17.25 && abs(q.y + 3.0) < 11.5) {
               vec2 a = q.xy - vec2(0.0, -3.0);
               float eyes = max(abs(abs(a.x) - 6.0) - 1.6, abs(a.y - 2.5) - 2.2);
               float smile = max(abs(length(a - vec2(0.0, 3.0)) - 7.5) - 0.7, a.y + 1.5);
-              oc4 = vec4(min(eyes, smile) < 0.0 ? mix(vec3(0.96), mix(uDOut, vec3(1.0), 0.7), uDOutTint) : mix(vec3(0.27, 0.27, 0.29), uDOut * 0.6, uDOutTint), 1.0);
+              oc4 = vec4(min(eyes, smile) < 0.0 ? mix(vec3(0.96), mix(uDScreen.rgb, vec3(1.0), 0.7), uDScreen.a) : mix(vec3(0.27, 0.27, 0.29), uDScreen.rgb * 0.6, uDScreen.a), 1.0);
             }
           }
         }
@@ -3199,7 +3200,8 @@ vec4 partsLayer(vec2 px) {
       float npid = floor(texelFetch(uP, clamp(ip + ivec2(round(vec2(cos(an), sin(an)) * rr)), ivec2(0), lp), 0).b * 255.0 + 0.5);
       if (npid != pid && max(npid, pid) >= 40.0) {
         int w = int(max(npid, pid)) - 40;
-        vec3 ink = uPLineByPart > 0.5 ? uTypeColor[uPartType[w]] * 0.85 : uPLineCol;
+        vec3 tc = uTypeColor[uPartType[w]];
+        vec3 ink = uPLineByPart > 0.5 ? clamp(mix(vec3(dot(tc, vec3(0.299, 0.587, 0.114))), tc, 1.45) * 0.82, 0.0, 1.0) : uPLineCol;
         if (w == uHi && dot(uHiCol, vec3(1.0)) > 0.0) return vec4(uHiCol, 1.0);   // (a node hovered: its part, whole)
         return vec4(ink * uPLineA, uPLineA);   // (premultiplied)
       }
@@ -3550,6 +3552,7 @@ uniform float uCellPx;
 uniform vec2  uGridOff;
 uniform vec2  uCellRange;  // near, far of that depth (mm along the ray)
 uniform vec3  uHiCol;      // the highlighted part's colour (the node's palette); 0 = its 'colour' style colour
+uniform vec4  uKnobCol, uScreenCol, uHoleCol;   // pegboard: own colours for knob caps · screen face · speaker holes (a = 1: use it)
 layout(location = 1) out vec4 outOuter;
 layout(location = 2) out vec4 outMeta;   // for the outlines: part id, depth, face class
 
@@ -3722,7 +3725,14 @@ void main() {
       bool face = uPartType[hi] == 6
         ? abs(q.x) < 19.8 && abs(q.y) < 13.8 && q.z > 1.4                    // LED matrix: the LED field
         : abs(q.x) < 17.3 && abs(q.y + 3.0) < 11.6 && q.z > 2.5;             // OLED: the glass panel
-      if (face) outOuter = vec4(tileLike ? (led ? INK : vec3(0.93)) : col, 1.0);
+      // …in the outside's colour (the knob caps' dark rubber, lit the same way), the lit LEDs light on it
+      vec3 kc = matColor(M_RUBBER) * (0.6 + 0.55 * max(dot(n, L), 0.0) + 0.12 * max(n.y, 0.0));
+      kc = mix(kc, vec3(1.0), 0.1);
+      if (uPartStyle != 0) kc = vec3(dot(kc, vec3(0.299, 0.587, 0.114))) * uPartTint;   // (the drawn styles: greys, as the caps)
+      if (uScreenCol.a > 0.5) kc = uScreenCol.rgb * (0.78 + 0.25 * max(dot(n, L), 0.0) + 0.06 * max(n.y, 0.0));   // its own colour
+      // an own colour: the lit LEDs take the contrast — light on a dark face, ink on a light one (white screen, dark face)
+      vec3 ledC = uScreenCol.a > 0.5 ? (dot(uScreenCol.rgb, vec3(0.299, 0.587, 0.114)) > 0.62 ? INK * 1.3 : vec3(0.93)) : cs == 0 ? col : vec3(0.93);
+      if (face) outOuter = vec4(min(led ? ledC : kc, vec3(1.0)), 1.0);
     }
   }
 #endif
@@ -3743,6 +3753,9 @@ void main() {
         c = mix(vec3(0.17, 0.17, 0.2), vec3(0.32, 0.32, 0.36), 1.0 - abs(dot(n2, -rd)));
       }
       if (uPartStyle != 0) c = vec3(dot(c, vec3(0.299, 0.587, 0.114))) * uPartTint;   // the drawn styles: greys
+      // their own colours (pegboard pills): the cap lit softly, the hole a deeper well of it
+      if (kind < 2.5 && uKnobCol.a > 0.5) c = uKnobCol.rgb * (0.72 + 0.3 * max(dot(n2, L), 0.0) + 0.08 * max(n2.y, 0.0)) + vec3(0.08) * pow(max(dot(reflect(-L, n2), -rd), 0.0), 12.0);
+      if (kind > 2.5 && uHoleCol.a > 0.5) c = uHoleCol.rgb * mix(0.62, 0.85, 1.0 - abs(dot(n2, -rd)));
       outOuter = vec4(min(c, vec3(1.0)), 1.0);
     }
   }
@@ -3803,6 +3816,7 @@ uniform vec3  uSideFill;   // side faces
 uniform vec3  uWheelFill;
 uniform vec3  uDotCol;     // dots on the shape
 uniform vec3  uPageDot;    // dots on the page
+uniform float uPageMarks;  // 1 = the marks on the page too · 0 = only on the shape (a plain page)
 uniform float uPattern;    // 1 = the dot on every cell (cross) · 0 = none: only the snap points, in SVG (cross 2)
 uniform int   uMark;       // pattern mark, as the snap toggle: 0 dot · 1 cross · 2 ring · 3 bracket
 uniform float uDrawT;      // cross: after a view change the shape builds up cell by cell (1 = built)
@@ -3913,7 +3927,7 @@ void main() {
   }
   else m = 1.0 - smoothstep(r - 0.5, r + 0.5, length(d));                                                // dot
   if (uMark != 0) m *= 0.7;            // a line mark carries more ink than a dot: a lighter tone keeps it fine
-  float dot1 = m * uPattern;
+  float dot1 = m * uPattern * (A.x > 0.0 ? 1.0 : uPageMarks);
   if (dot1 > 0.0) col = mix(col, vec4(A.x > 0.0 ? uDotCol : uPageDot, 1.0), dot1);
 
   if (uPartStyle == 6) {

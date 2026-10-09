@@ -125,7 +125,7 @@ export const CONFIG = {
   /** flat hd: length of the hand-drawn redraw after a view change (s) */
   flatHd: { redraw: 1.6, redraw2: 1.25 },
   /** flat hd 2: the drawing's colour (the outline and everything outside), to choose from */
-  flatLineCols: { orange: '#ff8f59', grey: '#8c867c', aqua: '#5fb5b0', olive: '#7f8a62', ink: '#3a3c30', white: '#ffffff' },   // s: the drawing growing back (flat hd · flat hd 2: quicker)
+  flatLineCols: { orange: '#ff8f59', grey: '#8c867c', aqua: '#5fb5b0', olive: '#7f8a62', yellow: '#e2d66e', ink: '#3a3c30', white: '#ffffff' },   // s: the drawing growing back (flat hd · flat hd 2: quicker)
 
   /** sketch view: cell size of the stepped pencil line (mm) */
   sketch: { cellMm: 5 },

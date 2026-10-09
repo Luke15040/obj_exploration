@@ -1,7 +1,7 @@
-import { CONFIG } from '../config.js?v=202610091312';
-import { params } from '../state.js?v=202610091312';
-import { view } from '../view.js?v=202610091312';
-import { basis } from './wire.js?v=202610091312';
+import { CONFIG } from '../config.js?v=202610091549';
+import { params } from '../state.js?v=202610091549';
+import { view } from '../view.js?v=202610091549';
+import { basis } from './wire.js?v=202610091549';
 
 /**
  * Snap markers — one visual language for every snap point (add-ons on a face, the
@@ -12,7 +12,7 @@ const P = CONFIG.palette;
 const VIEW_INK = { flathd: '#2f2fa8', sketch: '#2f2fa8', empty: '#2f2fa8', flathd2: P.flat.red, flat: P.flat.red, live: '#f4f2ec', density: '#ffffff', particles: '#f4f2ec', picasso: '#141312' };
 
 // (flat hd 2: the colour chosen for its drawing)
-export const markerInk = () => (params.view === 'flathd2' ? CONFIG.flatLineCols?.[params.flatOutCol !== 'same' ? params.flatOutCol : params.flatLineCol] : null) || VIEW_INK[params.view] || P.flat.ink;   // (the outside's colour: the snaps are where it goes)
+export const markerInk = () => (params.view === 'flathd2' ? CONFIG.flatLineCols?.[(params.flatKnobCol ?? params.flatOutCol) !== 'same' ? (params.flatKnobCol ?? params.flatOutCol) : params.flatLineCol] : null) || VIEW_INK[params.view] || P.flat.ink;   // (the outside's colour: the snaps are where it goes)
 
 /** SVG path data of one marker of size k (px) at (x, y). */
 export function markerPath(style, x, y, k) {

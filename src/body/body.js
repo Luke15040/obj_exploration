@@ -1,14 +1,14 @@
-import { CONFIG, NODE_PALETTE, CROSS_PALETTE } from '../config.js?v=202610091312';
-import { state, params } from '../state.js?v=202610091312';
-import { view } from '../view.js?v=202610091312';
-import { Spring } from './springs.js?v=202610091312';
-import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, flatBlurShader, gradientShader, markerShader, densityShader, densPartsShader, densPartsRealShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610091312';
-import { gbufferShader, edgeShader } from './blockshaders.js?v=202610091312';
-import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610091312';
-import { traceStrokes } from './strokes.js?v=202610091312';
-import { generateBlueNoise } from './bluenoise.js?v=202610091312';
-import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610091312';
-import { holePattern } from '../speaker-patterns.js?v=202610091312';
+import { CONFIG, NODE_PALETTE, CROSS_PALETTE } from '../config.js?v=202610091549';
+import { state, params } from '../state.js?v=202610091549';
+import { view } from '../view.js?v=202610091549';
+import { Spring } from './springs.js?v=202610091549';
+import { vertexShader, levelShader, easeShader, dotShader, cloudShader, flatShader, pixelShader, pixelDrawShader, pixel2Shader, orbitalShader, orbitalEdgeShader, pixel3dShader, glassShader, flat2GbufferShader, flat2EdgeShader, emptyCellShader, emptyEdgeShader, blobShader, sketchShader, flatHdShader, milkShader, liveEdgeShader, liveDrawShader, crossShader, crossHifiVariant, crossMaskShader, flatBlurShader, gradientShader, markerShader, densityShader, densPartsShader, densPartsRealShader, particlesShader, picassoShader, overlayShader } from './shaders.js?v=202610091549';
+import { gbufferShader, edgeShader } from './blockshaders.js?v=202610091549';
+import { startProgram, finishProgram, createFullscreenQuad, createR8Texture, createTarget, hexToRgb } from './gl.js?v=202610091549';
+import { traceStrokes } from './strokes.js?v=202610091549';
+import { generateBlueNoise } from './bluenoise.js?v=202610091549';
+import { layoutParts, MAX_PARTS, MAX_CABLES, CABLE_POINTS, CABLES, LIBRARY } from '../parts.js?v=202610091549';
+import { holePattern } from '../speaker-patterns.js?v=202610091549';
 
 const METHODS = { bayer: 0, blue: 1, split: 2 };
 
@@ -902,7 +902,11 @@ export function createBody(canvas) {
     gl.uniform1f(u.uPartsBroken, animate ? (params.flatPartsBroken === false ? 0 : 1) : 1);
     const outlineHex = animate ? CONFIG.flatLineCols[params.flatLineCol] ?? CONFIG.flatLineCols.orange : CONFIG.palette.flat.red;
     gl.uniform3fv(u.uOutline, hexToRgb(outlineHex));
-    gl.uniform3fv(u.uOutsideCol, hexToRgb(animate && params.flatOutCol !== 'same' ? CONFIG.flatLineCols[params.flatOutCol] ?? outlineHex : outlineHex));   // (the outside: the outline's colour, or its own)
+    // the outside: knob caps · screen · holes, each the outline's colour ('same') or its own
+    const outHex = (k) => (animate && k && k !== 'same' ? CONFIG.flatLineCols[k] ?? outlineHex : outlineHex);
+    gl.uniform3fv(u.uOutsideCol, hexToRgb(outHex(params.flatKnobCol ?? params.flatOutCol)));
+    if (u.uOutScreenCol) gl.uniform3fv(u.uOutScreenCol, hexToRgb(outHex(params.flatScreenCol ?? params.flatOutCol)));
+    if (u.uOutHoleCol) gl.uniform3fv(u.uOutHoleCol, hexToRgb(outHex(params.flatHoleCol ?? params.flatOutCol)));
     gl.uniform1f(u.uSkinFill, animate ? params.flatSkinFill ?? 0 : 0);   // flat hd 2: the surfaces' fill
     gl.uniform1f(u.uLineW, Math.max(1, 1.1 * pxr() * thin));
     redrawUniforms(u);
@@ -1479,6 +1483,7 @@ export function createBody(canvas) {
     // (condense / evaporate: as the ball goes, the parts come forward)
     gl.uniform1f(u.uInsideA, (params.densInside ?? 0) + (trMode < 2 ? (1 - (params.densInside ?? 0)) * tr : 0));
     gl.uniform1f(u.uFrost, params.densFrost ?? 0);
+    gl.uniform1f(u.uPartsCrisp, params.densPartStyle === 'outline' && params.densPartLineCol === 'parts' ? 1 : 0);
     gl.uniform1f(u.uGlow, params.densGlow ?? 0);
     gl.uniform1f(u.uDGrain, params.densGrain ?? 1);
     gl.uniform1f(u.uDEdge, params.densEdge ?? 0.47);
@@ -1502,9 +1507,10 @@ export function createBody(canvas) {
     gl.uniform2f(u.uHover, mouse.x * pxr(), size.h - mouse.y * pxr());
     gl.uniform1f(u.uHoverAmt, Math.max(0, Math.min(1, mouse.amt.value)));
     // the outside (knob caps, holes, the screen): as it is, or in a colour of its own
-    const dOut = params.densOutCol && params.densOutCol !== 'real' ? CONFIG.flatLineCols[params.densOutCol] : null;
-    gl.uniform1f(u.uDOutTint, dOut ? 1 : 0);
-    gl.uniform3fv(u.uDOut, hexToRgb(dOut ?? '#000000'));
+    const dCol = (k) => (CONFIG.flatLineCols[k] ? [...hexToRgb(CONFIG.flatLineCols[k]), 1] : [0, 0, 0, 0]);   // (knob · screen · holes, each its own)
+    gl.uniform4fv(u.uDKnob, dCol(params.densKnobCol ?? params.densOutCol));
+    gl.uniform4fv(u.uDScreen, dCol(params.densScreenCol ?? params.densOutCol));
+    gl.uniform4fv(u.uDHole, dCol(params.densHoleCol ?? params.densOutCol));
     if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], plook === 3 ? nodeColors : typeColors);   // ('colour': the node palette, as in cross)
     gl.uniform3fv(u.uHiCol, params.highlightColour ? hexToRgb(params.highlightColour) : [0, 0, 0]);
     if (densParts.w !== size.w || densParts.h !== size.h) { densParts.resize(size.w, size.h); densParts.w = size.w; densParts.h = size.h; densParts.key = null; }
@@ -1530,7 +1536,7 @@ export function createBody(canvas) {
       gl.uniform1f(up.uPLineA, params.densPartLineA ?? 1);
       gl.uniform1f(up.uCellPx, cell);
       gl.uniform1i(up.uPartLook, real && !realReady ? 2 : plook);
-      if (up['uTypeColor[0]']) gl.uniform3fv(up['uTypeColor[0]'], plook === 3 ? nodeColors : typeColors);
+      if (up['uTypeColor[0]']) gl.uniform3fv(up['uTypeColor[0]'], plook === 3 || (plook === 4 && plc === 'parts') ? nodeColors : typeColors);   // (outlines by part: the node colours)
       gl.uniform3fv(up.uHiCol, params.highlightColour ? hexToRgb(params.highlightColour) : [0, 0, 0]);
       gl.bindVertexArray(pp.quad);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -1543,7 +1549,8 @@ export function createBody(canvas) {
     gl.uniform1f(u.uFrostOut, params.densFrostOut ?? 0);
     if (outLine) {
       if (densOuter.w !== size.w || densOuter.h !== size.h) { densOuter.resize(size.w, size.h); densOuter.w = size.w; densOuter.h = size.h; densOuter.key = null; }
-      const oHex = params.densOutCol && params.densOutCol !== 'real' ? CONFIG.flatLineCols[params.densOutCol] : CONFIG.flatLineCols[params.densPartLineCol] ?? '#ffffff';
+      const oKey = params.densKnobCol ?? params.densOutCol;   // (the outside as outlines: one line colour — the knobs')
+      const oHex = oKey && oKey !== 'real' ? CONFIG.flatLineCols[oKey] : CONFIG.flatLineCols[params.densPartLineCol] ?? '#ffffff';
       const okey = sk + '|' + oHex + (params.densPartLineW ?? 1) + (params.densPartLineA ?? 1) + state.leds.join('');
       if (okey !== densOuter.key) {
         densOuter.key = okey;
@@ -1743,7 +1750,7 @@ export function createBody(canvas) {
     const J = (o) => JSON.stringify(o, (k, v) => (typeof v === 'number' ? mm(v) : v));
     const key = [size.w, size.h, Math.round(view.focal() * pxr() * 10), Math.round(view.cx * 10), Math.round(view.cy * 10), ...cam.pos.map(mm), ...cam.right.map(dir), ...cam.up.map(dir)].join(',')
       + '|' + J(extras) + '|' + J(layout?.parts?.map((q) => q.c)) + '|' + J(layout?.stretch) + '|' + J(layout?.prims) + '|' + J(layout?.cables?.map((q) => q.points))
-      + '|' + vName + pstyle + outerOn + hs + params.look + params.highlight + params.highlightColour + state.speakerPattern + state.leds.join('');
+      + '|' + vName + pstyle + outerOn + hs + params.look + params.highlight + params.highlightColour + params.crossKnobCol + params.crossScreenCol + params.crossHoleCol + state.speakerPattern + state.leds.join('');
     crossHifi.resize(size.w, size.h);
     if (key !== crossHifi.key) {
       crossHifi.key = key;
@@ -1796,6 +1803,10 @@ export function createBody(canvas) {
           gl.uniform1f(u.uOuterOn, outerOn ? 1 : 0);
           gl.uniform1i(u.uSteps, 110);
           gl.uniform3fv(u.uHiCol, params.highlightColour ? hexToRgb(params.highlightColour) : [0, 0, 0]);
+          const own = (k) => (CONFIG.flatLineCols[k] ? [...hexToRgb(CONFIG.flatLineCols[k]), 1] : [0, 0, 0, 0]);   // pegboard: knob · screen · holes
+          if (u.uKnobCol) gl.uniform4fv(u.uKnobCol, own(params.crossKnobCol));
+          if (u.uScreenCol) gl.uniform4fv(u.uScreenCol, own(params.crossScreenCol));
+          if (u.uHoleCol) gl.uniform4fv(u.uHoleCol, own(params.crossHoleCol));
           bindTex(4, gtarget.tex, u.uG);
           gl.uniform1f(u.uCellPx, cell * hs);
           gl.uniform2f(u.uGridOff, off[0] * hs, off[1] * hs);
@@ -1852,6 +1863,7 @@ export function createBody(canvas) {
     gl.uniform3fv(u.uWheelFill, hexToRgb(X.wheel));
     gl.uniform3fv(u.uDotCol, hexToRgb(X.dot));
     gl.uniform3fv(u.uPageDot, hexToRgb(X.pageDot));
+    gl.uniform1f(u.uPageMarks, params.crossPageMarks === false ? 0 : 1);   // (pegboard: the page plain, the pattern only on the body)
     gl.uniform1f(u.uPattern, pattern ? 1 : 0);
     gl.uniform1i(u.uPartStyle, pstyle);
     if (u['uTypeColor[0]']) gl.uniform3fv(u['uTypeColor[0]'], typeColors);   // the flat hd 2 colours

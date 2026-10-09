@@ -1,5 +1,5 @@
-import { CONFIG } from '../config.js?v=202610091312';
-import { params } from '../state.js?v=202610091312';
+import { CONFIG } from '../config.js?v=202610091549';
+import { params } from '../state.js?v=202610091549';
 
 /**
  * The block prompt (cross page), drawn in the language of the pixel shape: every prompt is

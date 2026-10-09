@@ -1,6 +1,6 @@
-import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610091312';
-import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610091312';
-import { params } from '../state.js?v=202610091312';
+import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610091549';
+import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610091549';
+import { params } from '../state.js?v=202610091549';
 
 // three pages: the main one, lab.html with every particle / dither experiment, cross.html with only the cross view
 const LAB = document.body.dataset.page === 'lab';
@@ -250,6 +250,26 @@ export function createViewToggle({ orbit } = {}) {
     cbR.value = params.crossBright ?? 0.5;
     cbR.addEventListener('input', () => { params.crossBright = Number(cbR.value); });
     document.body.appendChild(cb);
+    // pegboard: the background — the body's pattern on the page too, or a plain page
+    const cpm = document.createElement('div');
+    cpm.id = 'crosspage';
+    cpm.className = 'crosscol';
+    cpm.innerHTML = '<span class="lbl">background</span><button data-cpm="1" class="word">pattern</button><button data-cpm="0" class="word">plain</button>';
+    const markCpm = () => cpm.querySelectorAll('[data-cpm]').forEach((b) => b.classList.toggle('on', (b.dataset.cpm === '1') === (params.crossPageMarks !== false)));
+    markCpm();
+    cpm.addEventListener('click', (e) => { const b = e.target.closest('[data-cpm]'); if (b) { params.crossPageMarks = b.dataset.cpm === '1'; markCpm(); } });
+    document.body.appendChild(cpm);
+    // pegboard: knob · screen · holes, each its own colour (real, or a swatch)
+    for (const [id, key, lbl] of [['crossknobcol', 'crossKnobCol', 'knob'], ['crossscreencol', 'crossScreenCol', 'screen'], ['crossholecol', 'crossHoleCol', 'holes']]) {
+      const el = document.createElement('div');
+      el.id = id;
+      el.className = 'crosscol';
+      el.innerHTML = `<span class="lbl">${lbl}</span><button data-cc="real" class="word">real</button>` + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-cc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
+      const mark = () => el.querySelectorAll('[data-cc]').forEach((b) => b.classList.toggle('on', b.dataset.cc === (params[key] ?? 'real')));
+      mark();
+      el.addEventListener('click', (e) => { const b = e.target.closest('[data-cc]'); if (b) { params[key] = b.dataset.cc; mark(); } });
+      document.body.appendChild(el);
+    }
   }
 
   // gradient: its sliders (grain · flow · wobble · round) and palettes (each with its page)
@@ -348,17 +368,18 @@ export function createViewToggle({ orbit } = {}) {
   dsaR.addEventListener('input', () => { params.densShapeA = Number(dsaR.value); });
   document.body.appendChild(dsa);
 
-  // density: the outside's colour (knob caps, speaker holes, the screen): as it is, or one of the swatches
-  const doc = document.createElement('div');
-  doc.id = 'densoutcol';
-  doc.innerHTML = '<span class="lbl">outside</span><button data-doc="real" class="word">real</button>' + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-doc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
-  const markDoc = () => doc.querySelectorAll('[data-doc]').forEach((b) => b.classList.toggle('on', b.dataset.doc === (params.densOutCol ?? 'real')));
-  markDoc();
-  doc.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-doc]');
-    if (b) { params.densOutCol = b.dataset.doc; markDoc(); }
-  });
-  document.body.appendChild(doc);
+  // density: knob · screen · holes, each its own colour (real, or a swatch) — as on the pegboard
+  for (const [id, key, lbl] of [['densknobcol', 'densKnobCol', 'knob'], ['densscreencol', 'densScreenCol', 'screen'], ['densholecol', 'densHoleCol', 'holes']]) {
+    params[key] ??= params.densOutCol ?? 'real';   // (from the one 'outside' colour they replace)
+    const el = document.createElement('div');
+    el.id = id;
+    el.className = 'denscol';
+    el.innerHTML = `<span class="lbl">${lbl}</span><button data-cc="real" class="word">real</button>` + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-cc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
+    const mark = () => el.querySelectorAll('[data-cc]').forEach((b) => b.classList.toggle('on', b.dataset.cc === params[key]));
+    mark();
+    el.addEventListener('click', (e) => { const b = e.target.closest('[data-cc]'); if (b) { params[key] = b.dataset.cc; mark(); } });
+    document.body.appendChild(el);
+  }
 
   // density: its colours (one ramp each)
   const dpl = document.createElement('div');
@@ -541,17 +562,18 @@ export function createViewToggle({ orbit } = {}) {
     fwR.value = params.flatLineW;
     fwR.addEventListener('input', () => { params.flatLineW = Number(fwR.value); });
     document.body.appendChild(fw);
-    // …the outside (screen, knobs, speaker holes): the lines' colour, or one of its own
-    const foc = document.createElement('div');
-    foc.id = 'flatoutcol';
-    foc.innerHTML = '<span class="lbl">outside</span><button data-foc="same" class="word">same</button>' + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-foc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
-    const markFoc = () => foc.querySelectorAll('[data-foc]').forEach((b) => b.classList.toggle('on', b.dataset.foc === params.flatOutCol));
-    markFoc();
-    foc.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-foc]');
-      if (b) { params.flatOutCol = b.dataset.foc; markFoc(); }
-    });
-    document.body.appendChild(foc);
+    // …the outside: knob · screen · holes, each the lines' colour ('same') or its own — as on the pegboard
+    for (const [id, key, lbl] of [['flatknobcol', 'flatKnobCol', 'knob'], ['flatscreencol', 'flatScreenCol', 'screen'], ['flatholecol', 'flatHoleCol', 'holes']]) {
+      params[key] ??= params.flatOutCol ?? 'same';   // (from the one 'outside' colour they replace)
+      const el = document.createElement('div');
+      el.id = id;
+      el.className = 'napcol';
+      el.innerHTML = `<span class="lbl">${lbl}</span><button data-cc="same" class="word">same</button>` + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-cc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
+      const mark = () => el.querySelectorAll('[data-cc]').forEach((b) => b.classList.toggle('on', b.dataset.cc === params[key]));
+      mark();
+      el.addEventListener('click', (e) => { const b = e.target.closest('[data-cc]'); if (b) { params[key] = b.dataset.cc; mark(); } });
+      document.body.appendChild(el);
+    }
     // …the shade (faces seen edge-on) on / off · the parts' outlines broken or whole
     const fsh = document.createElement('div');
     fsh.id = 'flatshade';
@@ -734,11 +756,11 @@ export function createViewToggle({ orbit } = {}) {
       // their order: as the stylesheet stacks them (the lower, the earlier) — density: its own, top to bottom,
       // the parts and everything about their outline together
       const ORDER = params.view === 'density' ? ['densedge', 'densgrain', 'densstyle', 'denspal', 'densglow', 'densmotion', 'densdiverge', 'denssoft',
-        'denstrans', 'frost', 'densalpha', 'insideop', 'outsideop', 'densoutlook', 'densoutcol', 'densfrostout', 'densparts', 'denslines', 'denspartlw', 'denspartop', 'denspartcol', 'snapstyle']
+        'denstrans', 'frost', 'densalpha', 'insideop', 'outsideop', 'densoutlook', 'densknobcol', 'densscreencol', 'densholecol', 'densfrostout', 'densparts', 'denslines', 'denspartlw', 'denspartop', 'denspartcol', 'snapstyle']
         : params.view === 'flathd2' ? ['flatlines', 'flatthin', 'flatfill', 'flatshade', 'flatguide',
           'unfinished', 'unfgaps', 'unftwice', 'unfhand', 'unfspeed', 'flatalive',
           'flatpartsmode', 'flatpartlines', 'flattone', 'frost', 'insideop',
-          'outsideop', 'flatoutcol', 'snapstyle'] : null;
+          'outsideop', 'flatknobcol', 'flatscreencol', 'flatholecol', 'snapstyle'] : null;
       els.forEach((el) => { el.style.bottom = ''; el.style.minWidth = ''; });
       const rank = (el) => (ORDER && ORDER.includes(el.id) ? -ORDER.indexOf(el.id) : null);
       els.sort((a, b) => {
@@ -773,6 +795,10 @@ export function createViewToggle({ orbit } = {}) {
       whl: 'The knobs on the object.',
       // pegboard
       crossbright: 'Makes the body lighter or darker.',
+      crosspage: 'The pattern on the whole page, or only on the body.',
+      crossknobcol: 'The colour of the knob caps.',
+      crossscreencol: 'The colour of the screen.',
+      crossholecol: 'The colour of the speaker holes.',
       voxshimmer: 'How much the loose voxels shimmer while the object turns.',
       voxels: 'How many loose voxels fly around while the object turns.',
       frostfollow: 'Whether the frost follows the tiles as they build up, or stays all the time.',
@@ -796,7 +822,9 @@ export function createViewToggle({ orbit } = {}) {
       flatpartsmode: 'Parts inside drawn as filled shapes or as outlines.',
       flatpartlines: 'The parts’ outlines broken like the drawing, or whole.',
       flattone: 'The colour scale of the parts inside.',
-      flatoutcol: 'The colour of what sits outside: screen, knobs, speaker holes.',
+      flatknobcol: 'The colour of the knob caps.',
+      flatscreencol: 'The colour of the screen.',
+      flatholecol: 'The colour of the speaker holes.',
       // density
       densedge: 'How crisp or hazy the edge of the shape is.',
       densgrain: 'How smooth or grainy the shape is.',
@@ -807,7 +835,9 @@ export function createViewToggle({ orbit } = {}) {
       densdiverge: 'How faithfully the shape follows the object, or strays freely from it.',
       denssoft: 'How tight or soft the shape is around the object.',
       densalpha: 'How see-through the shape is.',
-      densoutcol: 'The colour of what sits outside: screen, knobs, speaker holes.',
+      densknobcol: 'The colour of the knob caps.',
+      densscreencol: 'The colour of the screen.',
+      densholecol: 'The colour of the speaker holes.',
       densoutlook: 'What sits outside drawn solid, or as outlines.',
       densfrostout: 'How frosted the outside outlines are, on their own.',
       densparts: 'How the parts inside are drawn.',
