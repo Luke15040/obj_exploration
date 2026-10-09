@@ -1,25 +1,25 @@
-import { view } from './view.js?v=202610091549';
-import { state, setWheelSpread } from './state.js?v=202610091549';
-import { createOrbit } from './orbit.js?v=202610091549';
-import { createBody } from './body/body.js?v=202610091549';
-import { createComponents } from './components/components.js?v=202610091549';
-import { attachDrag } from './components/drag.js?v=202610091549';
-import { createExtras } from './components/extras.js?v=202610091549';
-import { createDebugPanel } from './debug/panel.js?v=202610091549';
-import { createPrompts } from './prompts.js?v=202610091549';
-import { createNodes } from './ui/nodes.js?v=202610091549';
-import { createBom } from './ui/bom.js?v=202610091549';
-import { createPartLabels } from './ui/labels.js?v=202610091549';
-import { createDiagram } from './ui/diagram.js?v=202610091549';
-import { createViewToggle } from './debug/viewtoggle.js?v=202610091549';
-import { createViewPad } from './ui/viewpad.js?v=202610091549';
-import { createFrame } from './ui/frame.js?v=202610091549';
-import { createGridPanel } from './ui/gridpanel.js?v=202610091549';
-import { createStretchPad } from './ui/stretchpad.js?v=202610091549';
+import { view } from './view.js?v=202610091620';
+import { state, setWheelSpread } from './state.js?v=202610091620';
+import { createOrbit } from './orbit.js?v=202610091620';
+import { createBody } from './body/body.js?v=202610091620';
+import { createComponents } from './components/components.js?v=202610091620';
+import { attachDrag } from './components/drag.js?v=202610091620';
+import { createExtras } from './components/extras.js?v=202610091620';
+import { createDebugPanel } from './debug/panel.js?v=202610091620';
+import { createPrompts } from './prompts.js?v=202610091620';
+import { createNodes } from './ui/nodes.js?v=202610091620';
+import { createBom } from './ui/bom.js?v=202610091620';
+import { createPartLabels } from './ui/labels.js?v=202610091620';
+import { createDiagram } from './ui/diagram.js?v=202610091620';
+import { createViewToggle } from './debug/viewtoggle.js?v=202610091620';
+import { createViewPad } from './ui/viewpad.js?v=202610091620';
+import { createFrame } from './ui/frame.js?v=202610091620';
+import { createGridPanel } from './ui/gridpanel.js?v=202610091620';
+import { createStretchPad } from './ui/stretchpad.js?v=202610091620';
 // (the angle snap is a modifier on the cross page: viewtoggle.js)
-// import { createSnapPad } from './ui/snappad.js?v=202610091549';
-import { createWheelPad } from './ui/wheelpad.js?v=202610091549';
-import { createDims } from './ui/dims.js?v=202610091549';
+// import { createSnapPad } from './ui/snappad.js?v=202610091620';
+import { createWheelPad } from './ui/wheelpad.js?v=202610091620';
+import { createDims } from './ui/dims.js?v=202610091620';
 
 const canvas = document.getElementById('body-layer');
 // if the GPU resets (driver timeout), come back with a fresh page once it is available again
@@ -159,8 +159,8 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); // clamp after tab switches
   last = now;
-  tick(dt);
-  requestAnimationFrame(frame);
+  requestAnimationFrame(frame);   // first: one bad frame must never stop the page (it froze, turn and all)
+  try { tick(dt); } catch (err) { if (!frame.warned) { frame.warned = true; console.error('tick failed', err); } }
 }
 
 function tick(dt, draw = true) {

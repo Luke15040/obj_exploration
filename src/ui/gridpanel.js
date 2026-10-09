@@ -1,4 +1,4 @@
-import { params } from '../state.js?v=202610091549';
+import { params } from '../state.js?v=202610091620';
 
 /**
  * Lab · dots grid: a small panel (left, only in that view) to tune the dithered dots —

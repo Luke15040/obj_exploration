@@ -1623,6 +1623,7 @@ body[data-page="cross"] #toolbox { display: none !important; }
 
 /* the page: one flat warm grey (cross page) */
 body[data-page="cross"] { background: #efeeeb !important; }
+body[data-page="cross"] { user-select: none; -webkit-user-select: none; }   /* (no stray selection to drag instead of turning) */
 
 /* density: the outside solid / outline, and its outlines' own frost */
 .dpill { display: none !important; }

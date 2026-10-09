@@ -1,7 +1,7 @@
-import { CONFIG } from './config.js?v=202610091549';
-import { view } from './view.js?v=202610091549';
-import { Spring } from './body/springs.js?v=202610091549';
-import { params } from './state.js?v=202610091549';
+import { CONFIG } from './config.js?v=202610091620';
+import { view } from './view.js?v=202610091620';
+import { Spring } from './body/springs.js?v=202610091620';
+import { params } from './state.js?v=202610091620';
 
 const DEG = Math.PI / 180;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -69,6 +69,10 @@ export function createOrbit(svg) {
 
   svg.addEventListener('pointerdown', (e) => {
     if (!isBackground(e) || e.button !== 0) return;
+    // no text selection and no native drag: a stray selection made the next drags start a browser
+    // drag-and-drop instead (pointercancel at once — the turn looked stuck)
+    e.preventDefault();
+    window.getSelection?.()?.removeAllRanges();
     try { svg.setPointerCapture(e.pointerId); } catch {} // capture can fail for synthetic pointers
     drag = { id: e.pointerId, x: e.clientX, y: e.clientY, from: { ...cur }, free: params.view === 'cross' || params.view === 'flathd2' || params.view === 'density', turning: false, start: { ...shown } };
     document.body.classList.add('is-orbiting');
@@ -113,6 +117,11 @@ export function createOrbit(svg) {
   };
   svg.addEventListener('pointerup', end);
   svg.addEventListener('pointercancel', end);
+  svg.addEventListener('lostpointercapture', end);
+  // released outside the layer (over a pill, outside the window) or the window lost focus mid-turn:
+  // end the turn anyway, so it never hangs half-way
+  window.addEventListener('pointerup', end, true);
+  window.addEventListener('blur', () => { if (drag) end({ pointerId: drag.id }); });
 
 
   svg.addEventListener('dblclick', (e) => {

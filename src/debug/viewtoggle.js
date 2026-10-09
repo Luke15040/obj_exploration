@@ -1,6 +1,6 @@
-import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610091549';
-import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610091549';
-import { params } from '../state.js?v=202610091549';
+import { CONFIG, CROSS_PALETTE } from '../config.js?v=202610091620';
+import { CELLS as VIEW_CELLS, ICONS as VIEW_ICONS } from '../ui/viewpad.js?v=202610091620';
+import { params } from '../state.js?v=202610091620';
 
 // three pages: the main one, lab.html with every particle / dither experiment, cross.html with only the cross view
 const LAB = document.body.dataset.page === 'lab';
@@ -241,6 +241,9 @@ export function createViewToggle({ orbit } = {}) {
     document.body.append(dol, dfo);
   }
 
+  // the 'real' swatch of the knob · screen · holes pills: each part's own colour (dark rubber, the dark screen, the dark wells)
+  const REAL_SW = { knob: '#57575c', screen: '#333336', holes: '#5c595e' };
+
   // pegboard (cross): how bright the body is — darker ↔ lighter (0.5 = as designed)
   if (CROSS) {
     const cb = document.createElement('div');
@@ -264,7 +267,7 @@ export function createViewToggle({ orbit } = {}) {
       const el = document.createElement('div');
       el.id = id;
       el.className = 'crosscol';
-      el.innerHTML = `<span class="lbl">${lbl}</span><button data-cc="real" class="word">real</button>` + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-cc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
+      el.innerHTML = `<span class="lbl">${lbl}</span><button data-cc="real" class="sw" title="real: as the part really is" style="--sw:${REAL_SW[lbl]}"></button>` + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-cc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
       const mark = () => el.querySelectorAll('[data-cc]').forEach((b) => b.classList.toggle('on', b.dataset.cc === (params[key] ?? 'real')));
       mark();
       el.addEventListener('click', (e) => { const b = e.target.closest('[data-cc]'); if (b) { params[key] = b.dataset.cc; mark(); } });
@@ -374,7 +377,7 @@ export function createViewToggle({ orbit } = {}) {
     const el = document.createElement('div');
     el.id = id;
     el.className = 'denscol';
-    el.innerHTML = `<span class="lbl">${lbl}</span><button data-cc="real" class="word">real</button>` + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-cc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
+    el.innerHTML = `<span class="lbl">${lbl}</span><button data-cc="real" class="sw" title="real: as the part really is" style="--sw:${REAL_SW[lbl]}"></button>` + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-cc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
     const mark = () => el.querySelectorAll('[data-cc]').forEach((b) => b.classList.toggle('on', b.dataset.cc === params[key]));
     mark();
     el.addEventListener('click', (e) => { const b = e.target.closest('[data-cc]'); if (b) { params[key] = b.dataset.cc; mark(); } });
@@ -532,6 +535,7 @@ export function createViewToggle({ orbit } = {}) {
   fls.addEventListener('click', (e) => {
     const a = e.target.closest('[data-flc]'), b = e.target.closest('[data-fp]');
     if (a) params.flatLineCol = a.dataset.flc;
+    if (a) document.querySelectorAll('.napcol [data-cc="same"]').forEach((b) => b.style.setProperty('--sw', CONFIG.flatLineCols[params.flatLineCol]));   // ('same': the lines' colour)
     if (b) params.flatParts = b.dataset.fp;
     markFls();
   });
@@ -568,7 +572,7 @@ export function createViewToggle({ orbit } = {}) {
       const el = document.createElement('div');
       el.id = id;
       el.className = 'napcol';
-      el.innerHTML = `<span class="lbl">${lbl}</span><button data-cc="same" class="word">same</button>` + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-cc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
+      el.innerHTML = `<span class="lbl">${lbl}</span><button data-cc="same" class="sw same" title="same as the lines" style="--sw:${CONFIG.flatLineCols[params.flatLineCol] ?? '#8c867c'}"></button>` + Object.entries(CONFIG.flatLineCols).map(([k, c]) => `<button data-cc="${k}" class="sw" title="${k === 'grey' ? 'warm grey' : k}" style="--sw:${c}"></button>`).join('');
       const mark = () => el.querySelectorAll('[data-cc]').forEach((b) => b.classList.toggle('on', b.dataset.cc === params[key]));
       mark();
       el.addEventListener('click', (e) => { const b = e.target.closest('[data-cc]'); if (b) { params[key] = b.dataset.cc; mark(); } });
