@@ -1379,6 +1379,10 @@ body[data-page="cross"] .node.vws,
 body[data-page="cross"] .node.snp,
 body[data-page="cross"].mode-flathd2 #frostfollow { display: none !important; }
 body[data-page="cross"] #viewtoggle { left: 50%; right: auto; transform: translateX(-50%); }
+/* bigger view switch on the cross page */
+body[data-page="cross"] #viewtoggle { font-size: 12.5px; }
+body[data-page="cross"] #viewtoggle button { padding: 7px 19px; }
+body[data-page="cross"].view-compiling #viewtoggle::after { top: 40px; }
 #leftmods {
   position: fixed; left: 20px; top: 50%; transform: translateY(-50%); z-index: 3;
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
@@ -1461,7 +1465,7 @@ body[data-page="cross"] #promptcells, body[data-page="cross"] #blockagain { disp
 
 /* the cross page: the tool nodes as modifiers in the left column (light cards like view / angle snap) */
 body[data-page="cross"] #links { display: none !important; }
-body[data-page="cross"] #leftmods { top: 70px; bottom: 80px; transform: none; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+body[data-page="cross"] #leftmods { top: 70px; bottom: 80px; transform: none; justify-content: safe center; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
 body[data-page="cross"] #leftmods .node.tool {
   position: static !important; left: auto !important; top: auto !important; right: auto !important; transform: none !important;
   --nd-frame: transparent; --nd-edge: transparent; --nd-body: transparent; --nd-ink: var(--ink); --nd-soft: var(--ink-soft); --nd-cell: var(--hair);

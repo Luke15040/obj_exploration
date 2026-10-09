@@ -1,4 +1,4 @@
-import { state, setStretch } from '../state.js?v=202610091622';
+import { state, setStretch } from '../state.js?v=202610091649';
 
 const NS = 'http://www.w3.org/2000/svg';
 const MIN = 1, MAX = 2;           // stretch range: the fitted shape … twice as wide / tall
